@@ -100,7 +100,7 @@ On this laptop (6 GB): chat qwen3.5:4b, split qwen3.5:9b; code qwen2.5-coder:3b;
 
 **AMD on Windows.** AMD now publishes its own PyTorch for recent Radeon GPUs on Windows (RX 7000/9000, Ryzen AI Max; repo.radeon.com); PyTorch's index has none. A ROCm build that works was already recognized on any OS (by `torch.version.hip`). What was missing: a CPU build on an AMD machine was reported as fine, with no hint that a GPU build exists. Now an info points to PyTorch's index (choose ROCm) on Linux and to AMD's Windows instructions on Windows. AMD's Radeon/Ryzen docs say they cover releases through ROCm 7.2.1 and newer docs are unified, so the link goes to the page that exists now, and the message does not name a Python version (it changes with AMD's releases). The AMD GPU finding no longer says "this tool does not check ROCm"; it says what it checks.
 
-**CI**: actions/checkout v4 → v7 and setup-uv v6 → v10, both on Node 24 (GitHub warned that Node 20 actions are deprecated). The inputs used (`python-version`, `activate-environment`) are unchanged in v10.
+**CI**: actions/checkout v4 → v7 and setup-uv v6 → v10, both on Node 24 (GitHub warned that Node 20 actions are deprecated). The inputs used (`python-version`, `activate-environment`) are unchanged in v10. The first push failed on every runner: setup-uv no longer publishes a moving `v10` tag, only exact releases, so it is now pinned to the v10.3.3 commit (safer for a third-party action anyway). CI then passed on all six jobs with no Node 20 warning.
 
 **Tests**: 55 (+4): the list has a model for every use on an 8 GB laptop without a GPU, the picks on a 6 GB and a 24 GB GPU, the AMD findings on Windows and Linux, AMD's Windows ROCm build recognized as working.
 
