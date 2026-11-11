@@ -1,6 +1,6 @@
 [project]
 name = "ai-env-doctor"
-version = "0.1.0"
+version = "1.0.0"
 description = "One command to find out why PyTorch does not use your GPU, what is wrong with CUDA, drivers, proxies and mirrors, and which local models this machine can run. Read-only, no dependencies."
 readme = "README.md"
 license = "MIT"

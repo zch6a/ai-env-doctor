@@ -132,3 +132,33 @@ On this laptop (6 GB): chat qwen3.5:4b, split qwen3.5:9b; code qwen2.5-coder:3b;
 **Open**
 - The conda fix end to end on a real conda environment with a CPU PyTorch (Miniconda is here, but installing PyTorch into it is a change to the user's machine I will not make for a test).
 - The review's findings on Linux, macOS and WSL are tested with synthetic machines only.
+
+## Round 5 — 2026-11-12: 1.0.0
+
+**Run from GitHub, as a user would**: `uvx --from git+https://github.com/zch6a/ai-env-doctor ai-env-doctor`, pointed at the Miniconda Python on this laptop. It fetched and built the commit in about 15 seconds and reported correctly: the conda environment seen, Miniconda's own pip version, not marked PEP 668. So the round 4 PYTHONHOME fix holds under `uvx`, the case it was for.
+
+**Every claim in the READMEs checked against the code.** Wrong ones, fixed:
+- "uv may pick [the CPU build] anywhere": not so. On Linux, PyPI's torch is a CUDA build; there a CPU build comes from PyTorch's CPU index or a lock file. Fixed in the finding's text and in the example.
+- "that is all it executes" (of the probe script): it also runs `nvidia-smi`, `lspci`, PowerShell's `Get-CimInstance`, `sysctl` and the `py` launcher. The README and `--help` now list them.
+- "`uvx` starts it in a second or two": only once it is cached; the first run fetches and builds it (about 15 s here).
+- "What it checks" did not mention what rounds 2–4 added (nvidia-smi missing, WSL 1, containers, PEP 668, AMD in WSL); the local Ollama check was not said to be a request to localhost only.
+
+**Every message read again.** Two said too much: "pip misreads a proxy without http://" (pip, through requests, assumes http://), and "the build advised is for CUDA 12.6" when nvidia-smi is missing (Blackwell gets 12.8). The eight entries added in round 4 had been written by a script on single lines of up to 443 characters; they are now in the file's style, and a check confirmed that only the four intended strings changed.
+
+**1.0.0**: version set, "in development" removed, the status says what was tested by hand, what by CI and what only by tests (WSL, containers, conda with a conda-installed PyTorch, AMD), and asks for reports from those machines. Tag `v1.0.0`.
+
+**Tests**: 71 on Windows (74 on Linux and macOS, where the bash checks run).
+
+## Summary
+
+ai-env-doctor answers "why does PyTorch not use my GPU?" with one command on Windows, macOS and Linux: it checks the driver, the PyTorch in each environment the user will actually run (by asking that environment), proxies, the network and disk space, and prints one fix per problem, as commands to copy, in English or Chinese; then the local models that fit.
+
+What mattered most, in hindsight:
+- **Asking the user's interpreter, not guessing.** It never imports torch itself; a probe script runs inside each Python found. Round 4 showed how easy this is to get wrong: the doctor's own launcher environment (uv's PYTHONHOME) silently changed what every probed Python saw.
+- **Reading PyTorch's own index** to advise a build. In November 2026 the obvious fix ("install the CUDA build") installs PyTorch 2.15, built only for CUDA 13, which a CUDA 12 driver cannot run.
+- **Fix commands that survive being pasted**: uv environments without pip, PowerShell's quoting rules, paths with `'`, `&`, `(` or `$`, conda's confirmation prompt, PEP 668 Pythons. Most of the bugs the two reviews found were here, and the tests now run the commands through the real PowerShell parser and bash.
+- **Not crying wolf**: no "install the driver" when only nvidia-smi is missing, in a container, or on integrated graphics; WSL's /dev/dxg is not an NVIDIA GPU.
+
+Rounds: development (28 tests) → 1 first review, end to end on an RTX 3060 (42) → 2 conda, WSL, dated model list (51) → 3 the model list checked against Ollama's library, AMD on Windows, CI on Node 24 (55) → 4 second review, the PYTHONHOME leak, `--json` documented (71) → 5 claims checked, 1.0.0.
+
+Still open: WSL, containers, AMD GPUs and conda with a conda-installed PyTorch have not been tried by hand; the model list needs checking against Ollama's library every few months (the report says when it is old).

@@ -105,8 +105,9 @@ def main(argv: list[str] | None = None) -> int:
     if hasattr(sys.stdout, "reconfigure"):
         sys.stdout.reconfigure(errors="replace", **({} if sys.stdout.isatty() else {"encoding": "utf-8"}))
     p = argparse.ArgumentParser(prog="ai-env-doctor", description="Why does my GPU not work for AI, and what can this machine run?",
-                                epilog="It changes nothing: the fixes are printed, not run. It runs each Python it checks, with a short "
-                                       "script that imports torch. Network checks send one HEAD request to each of "
+                                epilog="It changes nothing: the fixes are printed, not run. It reads system information (nvidia-smi, lspci, "
+                                       "PowerShell, sysctl) and runs each Python it checks with a short script that imports "
+                                       "torch. Network checks send one HEAD request to each of "
                                        + ", ".join(h[1].split("/")[2] for h in net.HOSTS) + " (--offline to skip).")
     p.add_argument("--version", action="version", version=f"ai-env-doctor {__version__}")
     p.add_argument("--lang", choices=["en", "zh"], default=None, help="language of the report (default: from the system, else en)")

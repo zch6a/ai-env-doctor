@@ -28,7 +28,8 @@ On a laptop where `uv pip install torch` had installed PyTorch the default way:
 Findings:
   ✗ PyTorch 2.15.0+cpu in C:\proj\.venv\Scripts\python.exe is the CPU-only build: it will not use the NVIDIA GeForce RTX 3060 Laptop GPU
       This is the most common reason for torch.cuda.is_available() to be False: `pip install torch` without PyTorch's own
-      index gives the CPU build on Windows (and uv may pick it anywhere).
+      index gives the CPU build on Windows (on Linux, PyPI's torch is a CUDA build: there the CPU one comes from PyTorch's CPU
+      index or a lock file that chose it).
       fix: uv pip uninstall --python C:\proj\.venv\Scripts\python.exe torch
            uv pip install --python C:\proj\.venv\Scripts\python.exe torch --index-url https://download.pytorch.org/whl/cu126
   · The newest PyTorch (2.15.0) needs a driver for CUDA 13.2; this one supports CUDA 12.7
@@ -54,7 +55,8 @@ has no pip; elsewhere it is `python -m pip`.
 
 - **GPU and driver**: NVIDIA (through `nvidia-smi`), Apple Silicon, AMD and others (as the operating
   system lists them; in WSL, as Windows lists them). A GPU with no driver, a driver that is loaded
-  wrongly after an update, WSL without the Windows driver, a driver too old for current PyTorch.
+  wrongly after an update, a driver without `nvidia-smi`, WSL without the Windows driver (and WSL 1,
+  which has no GPU), a container started without the GPU, a driver too old for current PyTorch.
 - **The PyTorch you will actually run**, in the project's `.venv`, the active virtualenv or conda
   environment, and the `python` on PATH (or `--python PATH`). It asks each one, in its own process, so
   it sees what your code sees:
@@ -63,11 +65,12 @@ has no pip; elsewhere it is `python -m pip`.
   - a build without code for the GPU (RTX 50-series need CUDA 12.8 or later);
   - CUDA that will not start, with what PyTorch said; an AMD build on an NVIDIA GPU;
   - on an AMD GPU, whether PyTorch is a ROCm build that sees it, and where the right build comes from
-    (PyTorch's index on Linux, AMD's own on Windows);
+    (PyTorch's index on Linux, AMD's own on Windows and in WSL);
   - Apple GPU (MPS) support, and Python running under Rosetta on Apple Silicon;
   - two environments that disagree (the GPU works in one, not in the one your editor uses);
   - in a conda environment, a PyTorch that conda installed (pip cannot remove it) and `cpuonly`, which
     keeps bringing the CPU build back: the fix removes them with conda first;
+  - a system Python that pip may not install into (PEP 668: the fix makes a virtual environment);
   - a 32-bit Python, the Microsoft Store `python` placeholder, a PyTorch that fails to import (with
     the missing DLL), torchvision built for another PyTorch, bitsandbytes too old for GPUs on Windows.
 - **Proxies and certificates**: an HTTP proxy without an HTTPS one (every download goes around it),
@@ -76,7 +79,8 @@ has no pip; elsewhere it is `python -m pip`.
 - **The network**: whether pypi.org, download.pytorch.org, huggingface.co, hf-mirror.com and Ollama's
   registry answer, through your proxy; DNS, timeouts, refused connections and certificate errors told
   apart; the mirror suggested when Hugging Face is blocked but the mirror is not.
-- **Room for models**: free space where Hugging Face and Ollama keep them; whether Ollama is running.
+- **Room for models**: free space where Hugging Face and Ollama keep them; whether Ollama is running
+  on this machine (one request to localhost, never through a proxy).
 - **Models this machine can run**: for chat, code, reasoning, images and embeddings, the largest
   well-known model that fits in GPU memory (or in RAM, without a GPU), and the next size up that runs
   split between GPU and CPU. The list is dated (November 2026), and the report says when it has grown
@@ -85,15 +89,17 @@ has no pip; elsewhere it is `python -m pip`.
 ## Safe to run
 
 - **It changes nothing.** It installs, removes and writes nothing; the fixes are printed for you to
-  run. To know what PyTorch your code gets, it does run each Python it checks (your project's
-  `.venv`, the active environment, the `python` on PATH) with a short script that imports torch, from
-  a neutral folder so that your project's own files are not picked up; that is all it executes.
+  run. What it executes: the system's own tools that report hardware (`nvidia-smi`, `lspci`,
+  PowerShell's `Get-CimInstance`, `sysctl`), and each Python it checks (your project's `.venv`, the
+  active environment, the `python` on PATH), with a short script that imports torch, from a neutral
+  folder so that your project's own files are not picked up.
 - **It sends nothing about you.** The network check is one HEAD request to each of the five hosts
   above, through your proxy as pip would make it, and one GET of PyTorch's public index; nothing about
   the machine goes with them. `--offline` skips all of it.
 - **Passwords in proxy URLs are hidden** in the report and in `--json` (and user names and tokens in
   them). Paths are not, and they contain your user name: look before you paste.
-- No dependencies: it is plain Python 3.10+, so `uvx` starts it in a second or two.
+- No dependencies: it is plain Python 3.10+. With `uvx`, the first run fetches and builds it (about
+  15 seconds here); later runs start at once.
 
 ## Install and use
 
@@ -117,12 +123,14 @@ needs fixing, 0 when not, 2 when the doctor itself failed. What `--json` contain
 
 ## Status
 
-0.1, in development. Tested with fake PyTorch builds of every kind (CPU, CUDA that works, CUDA that
-fails at start-up or in a kernel, missing GPU code, a broken import) run through the real probe,
-synthetic machines for every rule, and local stand-ins for the network checks. By hand on Windows 11
-with an RTX 3060 Laptop GPU (driver for CUDA 12.7), end to end: the CPU build diagnosed, the printed
-commands run, the GPU then working. CI also runs it on Linux (no GPU) and macOS (Apple M1); WSL and
-AMD GPUs are covered by the tests only.
+1.0. Tested with fake PyTorch builds of every kind (CPU, CUDA that works, CUDA that fails at start-up
+or in a kernel, missing GPU code, a broken import) run through the real probe, synthetic machines for
+every rule, the fix commands parsed by PowerShell and bash, and local stand-ins for the network
+checks. Reviewed twice by someone who had not written it (see [POLISH_LOG.md](POLISH_LOG.md)). By hand
+on Windows 11 with an RTX 3060 Laptop GPU (driver for CUDA 12.7), end to end: the CPU build
+diagnosed, the printed commands run, the GPU then working; and run with `uvx` from GitHub. CI runs it
+on Linux (no GPU) and macOS (Apple M1). WSL, containers, conda with a conda-installed PyTorch, and
+AMD GPUs are covered by the tests only: reports from those machines are welcome.
 
 ## Develop
 

@@ -49,22 +49,72 @@ M: dict[str, dict[str, tuple[str, str, str]]] = {
                "在 WSL 里运行 powershell.exe 失败了。没有 nvidia-smi，这里的 PyTorch 只能用 CPU。",
                "如果这台电脑有 NVIDIA 显卡：在 Windows 里更新驱动（" + DRIVERS + "），然后在 Windows 里运行 `wsl --shutdown`。"
                "不要在 WSL 里安装 Linux 版的 NVIDIA 驱动。")},
-    'wsl1': {"en": ('This is WSL 1, which has no GPU access', 'Only WSL 2 can use the GPU (through the Windows driver).', 'In Windows PowerShell: `wsl --set-version {distro} 2` (it converts the distribution; it takes a while).'),
-        "zh": ('这是 WSL 1，它完全用不了显卡', '只有 WSL 2 能用显卡（通过 Windows 的驱动）。', '在 Windows 的 PowerShell 里运行 `wsl --set-version {distro} 2`（会转换这个发行版，需要一段时间）。')},
-    'container-no-gpu': {"en": ("Inside a container, the host's {name} is not passed in", "A container uses the host's NVIDIA driver; it must not have one of its own, and gets the GPU only when started with it.", 'Start it with `--gpus all` (Docker, with the NVIDIA Container Toolkit on the host) or `--device nvidia.com/gpu=all` (Podman); see https://docs.nvidia.com/datacenter/cloud-native/container-toolkit/'),
-        "zh": ('在容器里，宿主机的 {name} 没有传进来', '容器使用宿主机的 NVIDIA 驱动，自己不能装驱动，只有启动时传入显卡才能用。', '启动时加上 `--gpus all`（Docker，宿主机要装 NVIDIA Container Toolkit）或 `--device nvidia.com/gpu=all`（Podman）；见 https://docs.nvidia.com/datacenter/cloud-native/container-toolkit/')},
-    'nvidia-smi-missing': {"en": ('The NVIDIA driver is there ({name}), but nvidia-smi was not found', "Without nvidia-smi the driver's version and the CUDA it supports cannot be read, so the build advised here is one most current drivers run (CUDA 12.6).", "On Linux, install your distribution's NVIDIA utilities (`nvidia-smi` or `nvidia-utils-<driver version>`); on Windows, reinstall or update the driver: https://www.nvidia.com/drivers"),
-        "zh": ('NVIDIA 驱动是有的（{name}），但找不到 nvidia-smi', '没有 nvidia-smi 就读不出驱动版本和它支持的 CUDA，所以这里建议的是大多数现行驱动都能跑的版本（CUDA 12.6）。', 'Linux 上安装发行版的 NVIDIA 工具包（`nvidia-smi` 或 `nvidia-utils-<驱动版本>`）；Windows 上重装或更新驱动：https://www.nvidia.com/drivers')},
-    'gpu-mac-metal': {"en": ('A GPU that PyTorch uses through Metal (MPS)', "An Intel Mac's AMD GPU; MPS works there from macOS 12.3.", ''),
-        "zh": ('一块 PyTorch 能通过 Metal（MPS）使用的显卡', 'Intel Mac 上的 AMD 显卡；macOS 12.3 起可以用 MPS。', '')},
-    'torch-mps-metal': {"en": ('PyTorch {version} uses the GPU through Metal (MPS)', '{path}', ''),
-        "zh": ('PyTorch {version} 能通过 Metal（MPS）使用显卡', '{path}', '')},
-    'cuda-visible-devices-range': {"en": ('CUDA_VISIBLE_DEVICES={value} names a GPU that is not there', 'GPUs are numbered from 0, and this machine has {count}; a number past the last hides them all.', 'Set it to 0, or unset it (`unset CUDA_VISIBLE_DEVICES`; in PowerShell `Remove-Item Env:CUDA_VISIBLE_DEVICES`).'),
-        "zh": ('CUDA_VISIBLE_DEVICES={value} 指定了不存在的显卡', '显卡从 0 开始编号，这台电脑有 {count} 块；超出范围的编号会把显卡全部藏起来。', '设为 0，或者取消这个变量（`unset CUDA_VISIBLE_DEVICES`，PowerShell 里是 `Remove-Item Env:CUDA_VISIBLE_DEVICES`）。')},
-    'torch-cuda-on-amd': {"en": ("PyTorch {version} is built for NVIDIA's CUDA {wheel}: it cannot use the {gpu}", 'AMD GPUs need a ROCm build.', '{amd_fix}'),
-        "zh": ('PyTorch {version} 是 NVIDIA 的 CUDA {wheel} 版：用不了 {gpu}', 'AMD 显卡需要 ROCm 版。', '{amd_fix}')},
-    'torch-cpu-amd-wsl': {"en": ('PyTorch {version} in {path} is the CPU build: it does not use the {gpu}', 'In WSL, ROCm runs on the Windows Adrenalin driver, for recent Radeon GPUs; do not install the Linux amdgpu driver inside WSL.', "AMD's WSL instructions and supported GPUs: https://rocm.docs.amd.com/projects/radeon-ryzen/en/latest/docs/install/installrad/wsl/howto_wsl.html"),
-        "zh": ('{path} 里的 PyTorch {version} 是 CPU 版：用不了 {gpu}', '在 WSL 里，ROCm 依靠 Windows 的 Adrenalin 驱动，支持较新的 Radeon 显卡；不要在 WSL 里安装 Linux 的 amdgpu 驱动。', 'AMD 的 WSL 安装说明和支持的显卡：https://rocm.docs.amd.com/projects/radeon-ryzen/en/latest/docs/install/installrad/wsl/howto_wsl.html')},
+    "wsl1": {
+        "en": ("This is WSL 1, which has no GPU access",
+               "Only WSL 2 can use the GPU (through the Windows driver).",
+               "In Windows PowerShell: `wsl --set-version {distro} 2` (it converts the distribution; it takes a while)."),
+        "zh": ("这是 WSL 1，它完全用不了显卡",
+               "只有 WSL 2 能用显卡（通过 Windows 的驱动）。",
+               "在 Windows 的 PowerShell 里运行 `wsl --set-version {distro} 2`（会转换这个发行版，需要一段时间）。")},
+    "container-no-gpu": {
+        "en": ("Inside a container, the host's {name} is not passed in",
+               "A container uses the host's NVIDIA driver; it must not have one of its own, and gets the GPU only when started with it.",
+               "Start it with `--gpus all` (Docker, with the NVIDIA Container Toolkit on the host) or `--device "
+               "nvidia.com/gpu=all` (Podman); see https://docs.nvidia.com/datacenter/cloud-native/container-toolkit/"),
+        "zh": ("在容器里，宿主机的 {name} 没有传进来",
+               "容器使用宿主机的 NVIDIA 驱动，自己不能装驱动，只有启动时传入显卡才能用。",
+               "启动时加上 `--gpus all`（Docker，宿主机要装 NVIDIA Container To"
+               "olkit）或 `--device nvidia.com/gpu=all`（Podman）；见 htt"
+               "ps://docs.nvidia.com/datacenter/cloud-native/contai"
+               "ner-toolkit/")},
+    "nvidia-smi-missing": {
+        "en": ("The NVIDIA driver is there ({name}), but nvidia-smi was not found",
+               "Without nvidia-smi the driver's version and the CUDA it supports cannot be read, so the build advised "
+               "here is one most current drivers run.",
+               "On Linux, install your distribution's NVIDIA utilities (`nvidia-smi` or `nvidia-utils-<driver "
+               "version>`); on Windows, reinstall or update the driver: https://www.nvidia.com/drivers"),
+        "zh": ("NVIDIA 驱动是有的（{name}），但找不到 nvidia-smi",
+               "没有 nvidia-smi 就读不出驱动版本和它支持的 CUDA，所以这里建议的是大多数现行驱动都能跑的版本。",
+               "Linux 上安装发行版的 NVIDIA 工具包（`nvidia-smi` 或 `nvidia-utils-<驱动版本>`）；Windows 上重装或更新驱动：https://www.nvidia.com/drivers")},
+    "gpu-mac-metal": {
+        "en": ("A GPU that PyTorch uses through Metal (MPS)",
+               "An Intel Mac's AMD GPU; MPS works there from macOS 12.3.",
+               ""),
+        "zh": ("一块 PyTorch 能通过 Metal（MPS）使用的显卡",
+               "Intel Mac 上的 AMD 显卡；macOS 12.3 起可以用 MPS。",
+               "")},
+    "torch-mps-metal": {
+        "en": ("PyTorch {version} uses the GPU through Metal (MPS)",
+               "{path}",
+               ""),
+        "zh": ("PyTorch {version} 能通过 Metal（MPS）使用显卡",
+               "{path}",
+               "")},
+    "cuda-visible-devices-range": {
+        "en": ("CUDA_VISIBLE_DEVICES={value} names a GPU that is not there",
+               "GPUs are numbered from 0, and this machine has {count}; a number past the last hides them all.",
+               "Set it to 0, or unset it (`unset CUDA_VISIBLE_DEVICES`; in PowerShell `Remove-Item Env:CUDA_VISIBLE_DEVICES`)."),
+        "zh": ("CUDA_VISIBLE_DEVICES={value} 指定了不存在的显卡",
+               "显卡从 0 开始编号，这台电脑有 {count} 块；超出范围的编号会把显卡全部藏起来。",
+               "设为 0，或者取消这个变量（`unset CUDA_VISIBLE_DEVICES`，PowerShell 里是 `Remove-Item Env:CUDA_VISIBLE_DEVICES`）。")},
+    "torch-cuda-on-amd": {
+        "en": ("PyTorch {version} is built for NVIDIA's CUDA {wheel}: it cannot use the {gpu}",
+               "AMD GPUs need a ROCm build.",
+               "{amd_fix}"),
+        "zh": ("PyTorch {version} 是 NVIDIA 的 CUDA {wheel} 版：用不了 {gpu}",
+               "AMD 显卡需要 ROCm 版。",
+               "{amd_fix}")},
+    "torch-cpu-amd-wsl": {
+        "en": ("PyTorch {version} in {path} is the CPU build: it does not use the {gpu}",
+               "In WSL, ROCm runs on the Windows Adrenalin driver, for recent Radeon GPUs; do not install the Linux "
+               "amdgpu driver inside WSL.",
+               "AMD's WSL instructions and supported GPUs: "
+               "https://rocm.docs.amd.com/projects/radeon-ryzen/en/latest/docs/install/installrad/wsl/howto_wsl.html"),
+        "zh": ("{path} 里的 PyTorch {version} 是 CPU 版：用不了 {gpu}",
+               "在 WSL 里，ROCm 依靠 Windows 的 Adrenalin 驱动，支持较新的 Radeon 显卡；不要在 WSL 里安装 Linux 的 amdgpu 驱动。",
+               "AMD 的 WSL 安装说明和支持的显卡：https://rocm.docs.amd.com/proj"
+               "ects/radeon-ryzen/en/latest/docs/install/installrad"
+               "/wsl/howto_wsl.html")},
     "externally-managed": {
         "en": ("{path} is marked as managed by another tool (PEP 668)",
                "pip refuses to install into it (\"externally-managed-environment\"): it belongs to the system's package manager "
@@ -151,10 +201,11 @@ M: dict[str, dict[str, tuple[str, str, str]]] = {
     "torch-cpu": {
         "en": ("PyTorch {version} in {path} is the CPU-only build: it will not use the {gpu}",
                "This is the most common reason for torch.cuda.is_available() to be False: `pip install torch` without PyTorch's own "
-               "index gives the CPU build on Windows (and uv may pick it anywhere).", "{fix_cmd}"),
+               "index gives the CPU build on Windows (on Linux, PyPI's torch is a CUDA build: there the CPU one comes from PyTorch's CPU "
+               "index or a lock file that chose it).", "{fix_cmd}"),
         "zh": ("{path} 里的 PyTorch {version} 是纯 CPU 版：用不了 {gpu}",
                "这是 torch.cuda.is_available() 为 False 最常见的原因：不指定 PyTorch 自己的源直接 `pip install torch`，在 Windows 上装到的就是 CPU 版"
-               "（uv 在任何系统上都可能选中它）。", "{fix_cmd}")},
+               "（Linux 上 PyPI 的 torch 是 CUDA 版：那里的 CPU 版来自 PyTorch 的 CPU 源，或者锁文件选了它）。", "{fix_cmd}")},
     "wheel-major-newer": {
         "en": ("PyTorch {version} is built for CUDA {wheel}, but the driver only supports CUDA {driver}",
                "A new major CUDA version needs a new driver.", f"Update the driver ({DRIVERS}), or install a build this driver can run: {{fix_cmd}}"),
@@ -238,8 +289,8 @@ M: dict[str, dict[str, tuple[str, str, str]]] = {
         "zh": ("{name}（{other}）和 PyTorch（{torch}）不是配套的版本", "不配套时会报找不到算子或 DLL 之类的错误。", "用同一个源、一条命令一起重装它们。")},
     # ---- proxies and certificates
     "proxy-no-scheme": {
-        "en": ("{detail} has no http:// in front", "Some tools (pip among them) then misread it.", "Write it as http://host:port."),
-        "zh": ("{detail} 前面没有 http://", "有些工具（包括 pip）会读错。", "写成 http://主机:端口。")},
+        "en": ("{detail} has no http:// in front", "Most tools then assume http://, not all do.", "Write it as http://host:port."),
+        "zh": ("{detail} 前面没有 http://", "大多数工具会当成 http://，但不是全部。", "写成 http://主机:端口。")},
     "proxy-bad-scheme": {
         "en": ("Unusual proxy scheme: {detail}", "Most tools understand http:// proxies only.", "Use an http:// address for the proxy."),
         "zh": ("少见的代理协议：{detail}", "大多数工具只认 http:// 代理。", "改用 http:// 开头的代理地址。")},
