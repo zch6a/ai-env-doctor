@@ -32,6 +32,7 @@ class System:
     os_version: str
     machine: str  # the hardware: x86_64, arm64 ...
     wsl: bool = False
+    wsl_gpu: bool = False  # WSL can reach a GPU through /dev/dxg
     rosetta: bool = False  # an x86_64 process on Apple Silicon
     ram_mb: int | None = None
     ram_free_mb: int | None = None
@@ -112,16 +113,47 @@ def nvidia() -> tuple[list[GPU], str | None, str | None]:
 
 # ---------------------------------------------------------------- what the OS lists, with or without a driver
 
-def os_display_adapters() -> list[str]:
+VIDEO_CONTROLLERS = "Get-CimInstance Win32_VideoController | ForEach-Object { $_.Name + '|' + $_.PNPDeviceID }"
+
+
+def os_display_adapters(in_wsl: bool = False) -> list[str]:
     if sys.platform == "win32":
-        out = run(["powershell", "-NoProfile", "-Command",
-                   "Get-CimInstance Win32_VideoController | ForEach-Object { $_.Name + '|' + $_.PNPDeviceID }"])
-        return parse_video_controllers(out or "")
+        return parse_video_controllers(run(["powershell", "-NoProfile", "-Command", VIDEO_CONTROLLERS]) or "")
+    if in_wsl:
+        # WSL's own PCI view shows only a "Basic Render Driver"; Windows knows the real GPUs. Interop runs
+        # powershell.exe from here when it is enabled (the default).
+        ps = shutil.which("powershell.exe") or "/mnt/c/Windows/System32/WindowsPowerShell/v1.0/powershell.exe"
+        if Path(ps).is_file():
+            return parse_video_controllers(run([ps, "-NoProfile", "-Command", VIDEO_CONTROLLERS]) or "")
+        return []
     if sys.platform.startswith("linux"):
         out = run(["lspci"])
-        return [line.split(": ", 1)[-1].strip() for line in (out or "").splitlines()
-                if re.search(r"VGA compatible|3D controller|Display controller", line)]
+        if out:
+            return [line.split(": ", 1)[-1].strip() for line in out.splitlines()
+                    if re.search(r"VGA compatible|3D controller|Display controller", line)]
+        return pci_display_devices(Path("/sys/bus/pci/devices"))  # no lspci (containers, minimal installs)
     return []
+
+
+PCI_VENDORS = {"0x10de": "NVIDIA GPU", "0x1002": "AMD GPU", "0x8086": "Intel GPU"}
+
+
+def pci_display_devices(root: Path) -> list[str]:
+    """Display controllers (PCI class 0x03....) from sysfs, by vendor id."""
+    names = []
+    try:
+        devices = sorted(root.iterdir())
+    except OSError:
+        return []
+    for dev in devices:
+        try:
+            cls = (dev / "class").read_text().strip().lower()
+            vendor = (dev / "vendor").read_text().strip().lower()
+        except OSError:
+            continue
+        if cls.startswith("0x03"):
+            names.append(f"{PCI_VENDORS.get(vendor, 'GPU')} (PCI {dev.name})")
+    return names
 
 
 def parse_video_controllers(text: str) -> list[str]:
@@ -251,9 +283,9 @@ def system() -> System:
         s.gpus.append(a)
         if s.rosetta:
             s.machine = "arm64"
-    s.gpu_seen_by_os = os_display_adapters() if not gpus else []
-    if s.wsl and not gpus and Path("/dev/dxg").exists():
-        s.gpu_seen_by_os.append("NVIDIA GPU (through WSL's /dev/dxg; the Windows driver has no CUDA support for WSL)")
+    s.gpu_seen_by_os = os_display_adapters(s.wsl) if not gpus else []
+    # /dev/dxg is WSL's door to whatever GPU Windows has (Intel and AMD too): it says there is a GPU, not whose.
+    s.wsl_gpu = bool(s.wsl and Path("/dev/dxg").exists())
     s.disk_free_mb = {name: free_space(path) for name, path in cache_dirs().items()}
     s.env = env_snapshot(os.environ, sys.platform)
     return s

@@ -38,6 +38,15 @@ M: dict[str, dict[str, tuple[str, str, str]]] = {
                "ROCm in detail yet.", "See https://rocm.docs.amd.com for what your GPU supports."),
         "zh": ("AMD 显卡：{name}", "PyTorch 通过 ROCm 使用 AMD 显卡（Linux，以及部分 Windows 环境）；本工具暂时不细查 ROCm。",
                "你的显卡支持什么，见 https://rocm.docs.amd.com")},
+    "wsl-gpu-unknown": {
+        "en": ("WSL can reach a GPU, but not through NVIDIA's driver", "WSL passes every Windows GPU through (/dev/dxg), and "
+               "which one this is could not be read: running powershell.exe from WSL failed. Without nvidia-smi, PyTorch here "
+               "runs on the CPU.", "If this PC has an NVIDIA GPU: update its driver in Windows (" + DRIVERS + "), then run "
+               "`wsl --shutdown` in Windows. Do not install a Linux NVIDIA driver inside WSL."),
+        "zh": ("WSL 能访问一块显卡，但不是通过 NVIDIA 驱动", "WSL 会把 Windows 的所有显卡都接进来（/dev/dxg），但读不出这块是什么显卡："
+               "在 WSL 里运行 powershell.exe 失败了。没有 nvidia-smi，这里的 PyTorch 只能用 CPU。",
+               "如果这台电脑有 NVIDIA 显卡：在 Windows 里更新驱动（" + DRIVERS + "），然后在 Windows 里运行 `wsl --shutdown`。"
+               "不要在 WSL 里安装 Linux 版的 NVIDIA 驱动。")},
     "gpu-none": {
         "en": ("No GPU for AI work: everything runs on the CPU ({ram} of memory)", "Small models run well enough on a CPU "
                "(see the models below); training and large models will be slow.", ""),
@@ -95,6 +104,22 @@ M: dict[str, dict[str, tuple[str, str, str]]] = {
     "torch-rocm-on-nvidia": {
         "en": ("PyTorch {version} is the AMD (ROCm) build, but the GPU is NVIDIA", "It will never use this GPU.", "{fix_cmd}"),
         "zh": ("PyTorch {version} 是 AMD（ROCm）版，但显卡是 NVIDIA 的", "它永远用不了这块显卡。", "{fix_cmd}")},
+    "torch-from-conda": {
+        "en": ("In {path}, conda installed PyTorch ({packages}, from {channel})",
+               "pip cannot remove packages conda installed, so the fix removes them with conda first; conda lists everything it will "
+               "remove (packages that need PyTorch go too) and asks before doing it. Then pip installs PyTorch's own build, which is "
+               "what PyTorch recommends inside conda. To stay with conda packages instead: `conda install -c conda-forge pytorch-gpu`.", ""),
+        "zh": ("{path} 里的 PyTorch 是 conda 装的（{packages}，来自 {channel}）",
+               "pip 删不掉 conda 装的包，所以修复命令先用 conda 删除它们；conda 会列出要删除的所有包（依赖 PyTorch 的包也会一起删）并先征求你的同意。"
+               "然后用 pip 装 PyTorch 官方的版本，这也是 PyTorch 推荐在 conda 里使用的方式。如果想继续用 conda 的包：`conda install -c conda-forge pytorch-gpu`。", "")},
+    "torch-from-conda-cpuonly": {
+        "en": ("In {path}, conda installed PyTorch with cpuonly ({packages}, from {channel})",
+               "cpuonly is what makes conda choose the CPU build, every time PyTorch is installed or updated. pip cannot remove packages "
+               "conda installed, so the fix removes them with conda first; conda lists everything it will remove and asks before doing "
+               "it. Then pip installs PyTorch's own build, which is what PyTorch recommends inside conda.", ""),
+        "zh": ("{path} 里的 PyTorch 是 conda 装的，而且装了 cpuonly（{packages}，来自 {channel}）",
+               "正是 cpuonly 让 conda 每次安装或更新 PyTorch 时都选 CPU 版。pip 删不掉 conda 装的包，所以修复命令先用 conda 删除它们；"
+               "conda 会列出要删除的所有包并先征求你的同意。然后用 pip 装 PyTorch 官方的版本，这也是 PyTorch 推荐在 conda 里使用的方式。", "")},
     "torch-cpu": {
         "en": ("PyTorch {version} in {path} is the CPU-only build: it will not use the {gpu}",
                "This is the most common reason for torch.cuda.is_available() to be False: `pip install torch` without PyTorch's own "

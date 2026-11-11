@@ -53,8 +53,8 @@ has no pip; elsewhere it is `python -m pip`.
 ## What it checks
 
 - **GPU and driver**: NVIDIA (through `nvidia-smi`), Apple Silicon, AMD and others (as the operating
-  system lists them). A GPU with no driver, a driver that is loaded wrongly after an update, WSL without
-  the Windows driver, a driver too old for current PyTorch.
+  system lists them; in WSL, as Windows lists them). A GPU with no driver, a driver that is loaded
+  wrongly after an update, WSL without the Windows driver, a driver too old for current PyTorch.
 - **The PyTorch you will actually run**, in the project's `.venv`, the active virtualenv or conda
   environment, and the `python` on PATH (or `--python PATH`). It asks each one, in its own process, so
   it sees what your code sees:
@@ -64,6 +64,8 @@ has no pip; elsewhere it is `python -m pip`.
   - CUDA that will not start, with what PyTorch said; an AMD build on an NVIDIA GPU;
   - Apple GPU (MPS) support, and Python running under Rosetta on Apple Silicon;
   - two environments that disagree (the GPU works in one, not in the one your editor uses);
+  - in a conda environment, a PyTorch that conda installed (pip cannot remove it) and `cpuonly`, which
+    keeps bringing the CPU build back: the fix removes them with conda first;
   - a 32-bit Python, the Microsoft Store `python` placeholder, a PyTorch that fails to import (with
     the missing DLL), torchvision built for another PyTorch, bitsandbytes too old for GPUs on Windows.
 - **Proxies and certificates**: an HTTP proxy without an HTTPS one (every download goes around it),
@@ -75,8 +77,8 @@ has no pip; elsewhere it is `python -m pip`.
 - **Room for models**: free space where Hugging Face and Ollama keep them; whether Ollama is running.
 - **Models this machine can run**: for chat, code, reasoning, images and embeddings, the largest
   well-known model that fits in GPU memory (or in RAM, without a GPU), and the next size up that runs
-  split between GPU and CPU. For a full catalogue with speed estimates, see
-  [llmfit](https://github.com/AlexsJones/llmfit).
+  split between GPU and CPU. The list is dated (November 2026), and the report says when it has grown
+  old. For a full catalogue with speed estimates, see [llmfit](https://github.com/AlexsJones/llmfit).
 
 ## Safe to run
 

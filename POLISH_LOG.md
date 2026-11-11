@@ -62,3 +62,28 @@ ai-env-doctor checks the whole chain on Windows, macOS and Linux, and gives one 
 - WSL and AMD/ROCm by hand.
 - The model list is dated (November 2026); a way to tell when it is stale.
 - The fix for a conda environment (`conda install` versus pip into conda).
+
+## Round 2 — 2026-11-12
+
+From the open list of round 1, then the whole tool read and run again.
+
+**conda environments.** The fix was wrong there. `pip uninstall torch` fails on a PyTorch that conda installed ("RECORD file not found ... installed by conda"), and the `cpuonly` package makes conda pick the CPU build again at every update. The probe now reads `conda-meta` (only the torch packages' file names, and their channel) and the fix becomes `conda remove -p PREFIX <the torch packages conda installed>` followed by the pip install from PyTorch's index, which is what PyTorch recommends inside conda since it stopped its own conda channel. Without `-y`: conda lists what it will remove, packages that depend on PyTorch included, and asks. When torch came from pip but `cpuonly` from conda, pip still uninstalls torch first, or the install would say "already satisfied". An info finding says why the fix starts with conda, and mentions `conda install -c conda-forge pytorch-gpu` for those who would rather stay with conda packages (checked: conda-forge publishes it, Windows included).
+
+**A dated model list.** `models.CATALOG_AS_OF` (2026-11); after 270 days the report says that newer models of the same sizes have probably come out, and where to look.
+
+**WSL and AMD, read again; two real bugs.**
+- In WSL, `/dev/dxg` was taken to mean an NVIDIA GPU without its driver. It exists for any GPU Windows has: every Intel-only laptop running WSL got a false "WSL cannot see the NVIDIA GPU" error. Now WSL asks Windows which GPUs there are (`powershell.exe` through interop, the same query as on Windows); only an NVIDIA GPU there gives the error, and when Windows cannot be asked, an info says there is a GPU of unknown make, with what to do if it is NVIDIA.
+- On Linux without `lspci` (containers, minimal installs) no GPU was seen at all, so a GPU without its driver went unnoticed. Now `/sys/bus/pci/devices` is read (class 0x03, vendor 10de / 1002 / 8086).
+
+**Experience, from running it here in both languages.**
+- The Chinese model table was misaligned: padding counted characters, and CJK characters take two columns. The same for the continuation lines of a two-line fix under "解决:". Both are padded by display width now.
+- The disk warning said "huggingface"; now "Hugging Face".
+- `--help` still said "only reads"; it now says what it runs.
+- The report language: `LANG=zh_CN` won over `LC_ALL=C`. Now the POSIX order (LC_ALL, LC_MESSAGES, LANG; the first one set decides).
+
+**Tests**: 51 (+9), 1 skipped on Windows. The conda reading is tested by running the real probe script against a fake `conda-meta` (including `pytorch-lightning`, which must not count as PyTorch).
+
+**Open**
+- WSL and conda by hand: neither is installed on this laptop, and I will not install them on the user's machine for a test.
+- The model list's contents: compare with what Ollama's library offers now, model by model.
+- ROCm on Windows (AMD's 2025 PyTorch builds for Radeon on Windows) is not recognized as such.

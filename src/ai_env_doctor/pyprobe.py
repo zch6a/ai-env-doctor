@@ -20,6 +20,8 @@ from pathlib import Path
 PACKAGES = ["pip", "torch", "torchvision", "torchaudio", "transformers", "accelerate", "bitsandbytes", "xformers", "flash-attn", "triton",
             "vllm", "llama-cpp-python", "onnxruntime", "onnxruntime-gpu", "tensorflow", "jax", "jaxlib", "mlx", "sentence-transformers",
             "diffusers", "peft", "huggingface-hub", "numpy", "nvidia-cudnn-cu12", "nvidia-cuda-runtime-cu12"]
+# conda's names for PyTorch and the packages that choose its build (cpuonly pins the CPU one).
+CONDA_TORCH = ["pytorch", "torchvision", "torchaudio", "cpuonly", "pytorch-cuda", "pytorch-gpu", "pytorch-cpu", "libtorch"]
 
 PROBE = r'''
 import json, platform, sys, warnings
@@ -34,6 +36,23 @@ try:
             pass
 except Exception as e:
     out["metadata_error"] = repr(e)
+try:  # a conda environment: which torch packages conda itself installed (pip cannot remove those)
+    import os
+    meta = os.path.join(sys.prefix, "conda-meta")
+    if os.path.isdir(meta):
+        mine = {}
+        for f in os.listdir(meta):
+            parts = f[:-5].rsplit("-", 2) if f.endswith(".json") else []
+            if len(parts) == 3 and parts[0] in CONDA_TORCH:
+                try:
+                    with open(os.path.join(meta, f), encoding="utf-8") as fh:
+                        channel = str(json.load(fh).get("channel") or "")
+                except Exception:
+                    channel = ""
+                mine[parts[0]] = {"version": parts[1], "build": parts[2], "channel": channel.rstrip("/").split("/")[-1]}
+        out["conda"] = {"prefix": sys.prefix, "packages": mine}
+except Exception as e:
+    out["conda_error"] = repr(e)
 if True:  # torch is tried even without metadata: a source build or a copied folder may have none
     t = {}
     try:
@@ -149,7 +168,7 @@ def windows_store_stub(path: str, returncode: int | None = None, output: str = "
 
 def probe(path: str, why: str = "", origin: str = "", timeout: float = 90) -> Interpreter:
     it = Interpreter(path, why, origin)
-    script = f"PACKAGES = {PACKAGES!r}\n{PROBE}"
+    script = f"PACKAGES = {PACKAGES!r}\nCONDA_TORCH = {CONDA_TORCH!r}\n{PROBE}"
     try:
         # From a neutral folder: with -c, the current folder comes first on sys.path, and a project's own
         # json.py (or torch/ folder) would be imported instead of the real one.

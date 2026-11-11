@@ -12,6 +12,15 @@ slower; with no GPU, it runs on the CPU from system memory.
 from __future__ import annotations
 
 from dataclasses import dataclass
+from datetime import date
+
+CATALOG_AS_OF = date(2026, 11, 1)  # update with the list
+STALE_AFTER_DAYS = 270  # new model families come out every few months
+
+
+def catalog_stale(today: date | None = None) -> bool:
+    """True once the list is old enough that newer, better models of the same size probably exist."""
+    return ((today or date.today()) - CATALOG_AS_OF).days > STALE_AFTER_DAYS
 
 
 @dataclass(frozen=True)

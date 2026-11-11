@@ -48,6 +48,23 @@ def install_cmd(it, tag: str | None, os_name: str, reinstall: bool = True) -> st
     names = " ".join(pkgs)
     index = f" --index-url https://download.pytorch.org/whl/{tag}" if tag else ""
     q = _quote(it.path, os_name)
+    conda = conda_torch(it)
+    if conda:
+        # Installed by conda: pip cannot remove it ("RECORD file not found ... installed by conda"), and
+        # cpuonly would keep pulling the CPU build back. conda removes them (it lists what and asks), then
+        # pip installs from PyTorch's index, as PyTorch itself now recommends inside conda.
+        prefix = _quote(it.info["conda"]["prefix"], os_name)
+        pkgs = ["torch"] + [p for p in ("torchvision", "torchaudio") if p in pkgs_present or p in conda]
+        names = " ".join(pkgs)
+        lines = [f"conda remove -p {prefix} {' '.join(conda)}"] if reinstall else []
+        by_pip = [p for p in ("torch", "torchvision", "torchaudio") if p in pkgs_present
+                  and {"torch": "pytorch"}.get(p, p) not in conda]  # e.g. cpuonly from conda, torch from pip
+        run = f"& {q}" if os_name == "windows" and q.startswith('"') else q
+        if reinstall and by_pip:
+            lines.append(f"{run} -m pip uninstall -y {' '.join(by_pip)}" if "pip" in pkgs_present
+                         else f"uv pip uninstall --python {q} {' '.join(by_pip)}")
+        lines.append(f"{run} -m pip install {names}{index}" if "pip" in pkgs_present else f"uv pip install --python {q} {names}{index}")
+        return "\n".join(lines)
     if "pip" in pkgs_present:
         run = f"& {q}" if os_name == "windows" and q.startswith('"') else q
         lines = [f"{run} -m pip uninstall -y {names}"] if reinstall else []
@@ -56,6 +73,16 @@ def install_cmd(it, tag: str | None, os_name: str, reinstall: bool = True) -> st
         lines = [f"uv pip uninstall --python {q} {names}"] if reinstall else []
         lines.append(f"uv pip install --python {q} {names}{index}")
     return "\n".join(lines)
+
+
+def conda_torch(it) -> list[str]:
+    """The torch packages conda installed in this environment, in the order to name them to `conda remove`;
+    empty when PyTorch there came from pip (or there is no conda)."""
+    mine = (((it.info or {}).get("conda") or {}).get("packages")) or {}
+    if not ({"pytorch", "libtorch", "cpuonly"} & set(mine)):
+        return []
+    order = ("pytorch", "torchvision", "torchaudio", "cpuonly", "pytorch-cuda", "pytorch-gpu", "pytorch-cpu", "libtorch")
+    return [p for p in order if p in mine]
 
 
 class Diagnosis:
@@ -96,6 +123,8 @@ def diagnose(system, interpreters, net: dict | None = None, lang: str = "en") ->
         d.add("ok", "gpu-apple", name=apple[0].name, memory=_gb(apple[0].memory_mb))
     elif listed_amd:
         d.add("info", "gpu-amd", name=listed_amd[0], os=system.os)
+    elif getattr(system, "wsl_gpu", False) and not system.gpu_seen_by_os:
+        d.add("info", "wsl-gpu-unknown", ram=_gb(system.ram_mb))  # a GPU, but Windows could not be asked whose
     else:
         d.add("info", "gpu-none", ram=_gb(system.ram_mb))
     nvidia_expected = bool(nvidia or listed_nvidia or system.nvidia_smi)
@@ -194,6 +223,12 @@ def diagnose(system, interpreters, net: dict | None = None, lang: str = "en") ->
             d.add("info", "torch-cuda-no-gpu", where, version=ver, wheel=built)
         elif not built:
             d.add("info", "torch-cpu-ok", where, version=ver, path=it.path)
+    for it in usable:  # why a fix starts with `conda remove`, said once per environment
+        conda = conda_torch(it)
+        if conda and any(f.where == it.path and "conda remove" in f.fix for f in d.findings):
+            channel = next((it.info["conda"]["packages"][p].get("channel") for p in conda if it.info["conda"]["packages"][p].get("channel")), "")
+            d.add("info", "torch-from-conda-cpuonly" if "cpuonly" in conda else "torch-from-conda", it.path, path=it.path,
+                  packages=" ".join(conda), channel=channel or "?")
     _environments_disagree(d, usable)
     _packages(d, usable, system)
 
@@ -204,7 +239,7 @@ def diagnose(system, interpreters, net: dict | None = None, lang: str = "en") ->
     # ---- disk
     for name, free in (system.disk_free_mb or {}).items():
         if free is not None and free < 20 * 1024:
-            d.add("warning", "disk-low", cache=name, free=_gb(free))
+            d.add("warning", "disk-low", cache={"huggingface": "Hugging Face", "ollama": "Ollama"}.get(name, name), free=_gb(free))
     order = {lv: i for i, lv in enumerate(LEVELS)}
     return sorted(d.findings, key=lambda f: order[f.level])
 

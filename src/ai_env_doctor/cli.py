@@ -28,14 +28,17 @@ TEXT = {
            "contacting": "Contacting {hosts} (one HEAD request each; --offline to skip)",
            "device": {"gpu": "on the GPU ({mem:.1f} GB)", "apple": "on the Apple GPU ({mem:.1f} GB)", "cpu": "on the CPU ({mem:.1f} GB of memory; slow)"},
            "uses": {"chat": "chat", "code": "code", "reasoning": "reasoning", "vision": "images", "embedding": "embeddings (search)"},
-           "sizes": "Sizes are Ollama's default builds (4-bit; embeddings 16-bit), approximate; `ollama run <name>` to try one."},
+           "sizes": "Sizes are Ollama's default builds (4-bit; embeddings 16-bit), approximate; `ollama run <name>` to try one.",
+           "stale": "This list is from {date}; newer models of the same sizes have probably come out since: see https://ollama.com/library, "
+                    "or update ai-env-doctor."},
     "zh": {"title": "ai-env-doctor {v}", "machine": "本机", "findings": "检查结果", "models": "这台电脑能跑的模型（Ollama）",
            "whole": "能完整放下", "split": "显卡和 CPU 分担，较慢", "none": "无", "fix": "解决", "summary": "{e} 项需要解决，{w} 项值得看看",
            "all_good": "没有需要解决的问题。", "net_skipped": "未检查网络（--offline）。",
            "contacting": "正在连接 {hosts}（每个只发一个 HEAD 请求；加 --offline 可跳过）",
            "device": {"gpu": "在显卡上（{mem:.1f} GB）", "apple": "在 Apple 显卡上（{mem:.1f} GB）", "cpu": "在 CPU 上（内存 {mem:.1f} GB，较慢）"},
            "uses": {"chat": "对话", "code": "写代码", "reasoning": "推理", "vision": "看图", "embedding": "向量（搜索）"},
-           "sizes": "大小是 Ollama 的默认版本（4 位量化；向量模型为 16 位），为近似值；用 `ollama run <名称>` 试用。"},
+           "sizes": "大小是 Ollama 的默认版本（4 位量化；向量模型为 16 位），为近似值；用 `ollama run <名称>` 试用。",
+           "stale": "这份清单是 {date} 的，之后很可能出了同样大小的更新模型：见 https://ollama.com/library ，或者更新 ai-env-doctor。"},
 }
 
 
@@ -66,7 +69,7 @@ def report(system, findings, fit, lang: str, color: bool, net_checked: bool) -> 
         if f.fix:
             first, *more = f.fix.splitlines()
             out.append(f"      {t['fix']}: {first}")
-            out.extend(f"           {line}" for line in more)
+            out.extend(" " * (6 + _width(t["fix"]) + 2) + line for line in more)  # under the first command
     if not net_checked:
         out.append(f"  {marks['info']} {t['net_skipped']}")
     errors = sum(f.level == "error" for f in findings)
@@ -78,12 +81,22 @@ def report(system, findings, fit, lang: str, color: bool, net_checked: bool) -> 
     for use in models.USES:
         whole = fit.full.get(use)
         split = fit.partial.get(use)
-        line = f"  {t['uses'][use]:<20} {t['whole']}: {whole.tag + f' ({whole.size_gb:g} GB)' if whole else t['none']}"
+        label = t["uses"][use]
+        line = f"  {label}{' ' * max(1, 21 - _width(label))}{t['whole']}: {whole.tag + f' ({whole.size_gb:g} GB)' if whole else t['none']}"
         if split:
             line += f";  {t['split']}: {split.tag} ({split.size_gb:g} GB)"
         out.append(line)
     out.append("  " + t["sizes"])
+    if models.catalog_stale():
+        out.append("  " + t["stale"].format(date=models.CATALOG_AS_OF.strftime("%Y-%m")))
     return "\n".join(out)
+
+
+def _width(s: str) -> int:
+    """Columns a terminal gives `s`: CJK characters take two."""
+    import unicodedata
+
+    return sum(2 if unicodedata.east_asian_width(c) in "WF" else 1 for c in s)
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -91,7 +104,8 @@ def main(argv: list[str] | None = None) -> int:
     if hasattr(sys.stdout, "reconfigure"):
         sys.stdout.reconfigure(errors="replace", **({} if sys.stdout.isatty() else {"encoding": "utf-8"}))
     p = argparse.ArgumentParser(prog="ai-env-doctor", description="Why does my GPU not work for AI, and what can this machine run?",
-                                epilog="Only reads: it installs and changes nothing. Network checks send one HEAD request to each of "
+                                epilog="It changes nothing: the fixes are printed, not run. It runs each Python it checks, with a short "
+                                       "script that imports torch. Network checks send one HEAD request to each of "
                                        + ", ".join(h[1].split("/")[2] for h in net.HOSTS) + " (--offline to skip).")
     p.add_argument("--version", action="version", version=f"ai-env-doctor {__version__}")
     p.add_argument("--lang", choices=["en", "zh"], default=None, help="language of the report (default: from the system, else en)")
@@ -145,10 +159,16 @@ def main(argv: list[str] | None = None) -> int:
 def default_lang() -> str:
     import locale
 
-    for value in (os.environ.get("LANG"), os.environ.get("LC_ALL"), (locale.getlocale()[0] or "")):
-        if value and value.lower().startswith(("zh", "chinese")):
-            return "zh"
-    return "en"
+    # As POSIX looks them up: the first one set decides (LC_ALL=C overrides LANG=zh_CN).
+    for name in ("LC_ALL", "LC_MESSAGES", "LANG"):
+        value = os.environ.get(name)
+        if value:
+            return "zh" if value.lower().startswith("zh") else "en"
+    try:
+        value = locale.getlocale()[0] or ""  # Windows: "Chinese (Simplified)_China"
+    except ValueError:
+        value = ""
+    return "zh" if value.lower().startswith(("zh", "chinese")) else "en"
 
 
 if __name__ == "__main__":

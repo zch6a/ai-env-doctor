@@ -38,7 +38,7 @@ uvx --from git+https://github.com/zch6a/ai-env-doctor ai-env-doctor
 
 ## 检查什么
 
-- **显卡和驱动**：NVIDIA（通过 `nvidia-smi`）、Apple 芯片、AMD 和其他（按操作系统列出的显示适配器）。有显卡没驱动、更新驱动后没重启导致驱动没加载、WSL 里没有 Windows 驱动、驱动太旧跑不了现在的 PyTorch。
+- **显卡和驱动**：NVIDIA（通过 `nvidia-smi`）、Apple 芯片、AMD 和其他（按操作系统列出的显示适配器；在 WSL 里按 Windows 列出的）。有显卡没驱动、更新驱动后没重启导致驱动没加载、WSL 里没有 Windows 驱动、驱动太旧跑不了现在的 PyTorch。
 - **你实际会用到的那个 PyTorch**：依次检查项目的 `.venv`、当前激活的虚拟环境或 conda 环境、PATH 上的 `python`（也可以用 `--python 路径` 指定）。它在每个环境自己的进程里去问，所以看到的就是你的代码看到的：
   - 有 NVIDIA 显卡却装了纯 CPU 版，这是最常见的问题；
   - 装的版本比驱动支持的 CUDA 新（CUDA 13 的 PyTorch 配 CUDA 12 的驱动）；
@@ -46,11 +46,12 @@ uvx --from git+https://github.com/zch6a/ai-env-doctor ai-env-doctor
   - CUDA 启动失败，并附上 PyTorch 的原话；NVIDIA 显卡装了 AMD 版；
   - Apple 显卡（MPS）支持，以及在 Apple 芯片上用 Rosetta 跑的 Python；
   - 两个环境不一致（一个能用显卡，编辑器用的那个却不能）；
+  - conda 环境里由 conda 装的 PyTorch（pip 删不掉）和 `cpuonly`（它会让 CPU 版一装再装）：修复命令会先用 conda 删掉它们；
   - 32 位 Python、微软商店的 `python` 占位程序、导入失败的 PyTorch（并指出缺的 DLL）、和 PyTorch 不配套的 torchvision、在 Windows 上太旧不支持显卡的 bitsandbytes。
 - **代理和证书**：只设置了 HTTP 代理没有 HTTPS 代理（所有下载都绕过了代理）、设置了代理却没有在 NO_PROXY 里排除 localhost（Ollama 这类本机服务会出错）、SOCKS 代理、指定的证书文件不存在、关闭了证书校验。
 - **网络**：pypi.org、download.pytorch.org、huggingface.co、hf-mirror.com 和 Ollama 的模型仓库能不能通过你的代理连上；区分 DNS、超时、拒绝连接和证书错误；Hugging Face 被挡而镜像能连时，建议使用镜像。
 - **放模型的空间**：Hugging Face 和 Ollama 存模型的磁盘还剩多少；Ollama 有没有在运行。
-- **这台电脑能跑的模型**：对话、写代码、推理、看图、向量这几类，各自能完整放进显存（没有显卡时放进内存）的最大常用模型，以及大一号、由显卡和 CPU 分担运行的模型。完整的模型目录和速度估计见 [llmfit](https://github.com/AlexsJones/llmfit)。
+- **这台电脑能跑的模型**：对话、写代码、推理、看图、向量这几类，各自能完整放进显存（没有显卡时放进内存）的最大常用模型，以及大一号、由显卡和 CPU 分担运行的模型。这份清单注明了日期（2026 年 11 月），过时了报告会提醒。完整的模型目录和速度估计见 [llmfit](https://github.com/AlexsJones/llmfit)。
 
 ## 放心运行
 
