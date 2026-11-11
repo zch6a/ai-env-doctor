@@ -21,8 +21,11 @@ def test_nvidia_smi_is_read():
 
 
 def test_passwords_in_proxy_urls_are_hidden():
-    assert redact("http://ann:s3cret@proxy.example:8080") == "http://ann:***@proxy.example:8080"
+    assert redact("http://ann:s3cret@proxy.example:8080") == "http://***@proxy.example:8080"
     assert redact("https://TOKEN123@pypi.example/simple") == "https://***@pypi.example/simple"
+    assert redact("https://TOKEN_abc123:@pypi.fury.io/user/") == "https://***@pypi.fury.io/user/", "a token as the user name"
+    assert redact("http://ann:p@ss@proxy:8080") == "http://***@proxy:8080", "an @ inside the password"
+    assert redact("https://host/simple?token=SECRET&x=1") == "https://host/simple?token=***&x=***"
     assert redact("http://proxy.example:8080") == "http://proxy.example:8080"
 
 
@@ -60,9 +63,11 @@ def test_packages_are_read_without_importing_them():
 
 
 @pytest.mark.skipif(sys.platform != "win32", reason="Windows only")
-def test_the_store_placeholder_is_not_run():
-    it = pyprobe.probe(r"C:\Users\x\AppData\Local\Microsoft\WindowsApps\python.exe")
-    assert it.error == "store-stub"
+def test_the_store_placeholder_is_told_by_what_it_does():
+    stub = r"C:\Users\x\AppData\Local\Microsoft\WindowsApps\python.exe"
+    assert pyprobe.windows_store_stub(stub, 9009, "")
+    assert not pyprobe.windows_store_stub(stub, 0, 'AI_ENV_DOCTOR_JSON{"python": "3.12.1"}'), "a real Store Python is checked"
+    assert not pyprobe.windows_store_stub(r"C:\Python312\python.exe", 9009, "")
 
 
 def test_the_project_venv_comes_first(tmp_path, monkeypatch):

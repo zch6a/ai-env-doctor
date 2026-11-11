@@ -96,6 +96,8 @@ def parse_driver_cuda(text: str) -> str | None:
 
 def nvidia() -> tuple[list[GPU], str | None, str | None]:
     smi = shutil.which("nvidia-smi")
+    if not smi and wsl() and Path("/usr/lib/wsl/lib/nvidia-smi").is_file():
+        smi = "/usr/lib/wsl/lib/nvidia-smi"  # in WSL it comes from the Windows driver
     if not smi and sys.platform == "win32":
         guess = Path(os.environ.get("SYSTEMROOT", r"C:\Windows")) / "System32" / "nvidia-smi.exe"
         smi = str(guess) if guess.is_file() else None
@@ -112,13 +114,31 @@ def nvidia() -> tuple[list[GPU], str | None, str | None]:
 
 def os_display_adapters() -> list[str]:
     if sys.platform == "win32":
-        out = run(["powershell", "-NoProfile", "-Command", "Get-CimInstance Win32_VideoController | ForEach-Object { $_.Name }"])
-        return [x.strip() for x in (out or "").splitlines() if x.strip()]
+        out = run(["powershell", "-NoProfile", "-Command",
+                   "Get-CimInstance Win32_VideoController | ForEach-Object { $_.Name + '|' + $_.PNPDeviceID }"])
+        return parse_video_controllers(out or "")
     if sys.platform.startswith("linux"):
         out = run(["lspci"])
         return [line.split(": ", 1)[-1].strip() for line in (out or "").splitlines()
                 if re.search(r"VGA compatible|3D controller|Display controller", line)]
     return []
+
+
+def parse_video_controllers(text: str) -> list[str]:
+    """Windows' display adapters, "name|PNPDeviceID" per line."""
+    names = []
+    for line in text.splitlines():
+        name, _, pnp = line.strip().partition("|")
+        if not name:
+            continue
+        # Without its driver, an NVIDIA GPU is a "Microsoft Basic Display Adapter"; its PCI vendor id
+        # (10DE NVIDIA, 1002 AMD) still says what it is.
+        if "VEN_10DE" in pnp.upper() and "nvidia" not in name.lower():
+            name = f"NVIDIA GPU ({name})"
+        elif "VEN_1002" in pnp.upper() and not re.search(r"amd|radeon", name, re.I):
+            name = f"AMD GPU ({name})"
+        names.append(name)
+    return names
 
 
 # ---------------------------------------------------------------- memory, CPU, Apple
@@ -232,12 +252,23 @@ def system() -> System:
         if s.rosetta:
             s.machine = "arm64"
     s.gpu_seen_by_os = os_display_adapters() if not gpus else []
+    if s.wsl and not gpus and Path("/dev/dxg").exists():
+        s.gpu_seen_by_os.append("NVIDIA GPU (through WSL's /dev/dxg; the Windows driver has no CUDA support for WSL)")
     s.disk_free_mb = {name: free_space(path) for name, path in cache_dirs().items()}
-    s.env = {k: redact(os.environ[k]) for k in ENV_KEYS if k in os.environ}
+    s.env = env_snapshot(os.environ, sys.platform)
     return s
 
 
+def env_snapshot(environ, platform_name: str) -> dict:
+    """The variables that matter, secrets hidden. On Windows names ignore case, so HTTP_PROXY and
+    http_proxy are the same variable: read once."""
+    keys = [k for k in ENV_KEYS if not (platform_name == "win32" and k != k.upper())]
+    return {k: redact(environ[k]) for k in keys if k in environ}
+
+
 def redact(value: str) -> str:
-    """A proxy or index URL with its password (or token) hidden: "http://ann:secret@proxy:8080" ->
-    "http://ann:***@proxy:8080". The report may be pasted into an issue."""
-    return re.sub(r"(://[^/:@\s]*):[^/@\s]*@", r"\1:***@", re.sub(r"(://)[^/:@\s]+@", r"\1***@", value)) if "@" in value else value
+    """A URL with whatever could be secret hidden, so that the report can be pasted into an issue: the
+    whole user part ("http://ann:secret@proxy" -> "http://***@proxy"; a token is often the user name),
+    and the values in the query ("?token=abc" -> "?token=***")."""
+    value = re.sub(r"(://)[^/?#\s]*@", r"\1***@", value)  # up to the last @ before the host
+    return re.sub(r"([?&][^=&#\s]+=)[^&#\s]*", r"\1***", value)

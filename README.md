@@ -22,14 +22,15 @@ it lists the local models this machine can run.
 uvx --from git+https://github.com/zch6a/ai-env-doctor ai-env-doctor
 ```
 
-On a laptop where `pip install torch` had installed PyTorch the default way:
+On a laptop where `uv pip install torch` had installed PyTorch the default way:
 
 ```text
 Findings:
   ✗ PyTorch 2.15.0+cpu in C:\proj\.venv\Scripts\python.exe is the CPU-only build: it will not use the NVIDIA GeForce RTX 3060 Laptop GPU
       This is the most common reason for torch.cuda.is_available() to be False: `pip install torch` without PyTorch's own
       index gives the CPU build on Windows (and uv may pick it anywhere).
-      fix: C:\proj\.venv\Scripts\python.exe -m pip install --force-reinstall torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu126
+      fix: uv pip uninstall --python C:\proj\.venv\Scripts\python.exe torch
+           uv pip install --python C:\proj\.venv\Scripts\python.exe torch --index-url https://download.pytorch.org/whl/cu126
   · The newest PyTorch (2.15.0) needs a driver for CUDA 13.2; this one supports CUDA 12.7
       The newest PyTorch this driver can run is 2.14.1, for CUDA 12.6 (cu126); the commands here install that.
       fix: To use PyTorch 2.15.0, update the driver: https://www.nvidia.com/drivers
@@ -42,9 +43,12 @@ Models this machine can run (Ollama) — on the GPU (5.5 GB):
   ...
 ```
 
-Note the second finding: the obvious fix, "install the CUDA build", would have installed PyTorch
-2.15, which is built only for CUDA 13 and does not run on this driver either. ai-env-doctor reads
-PyTorch's own index to know which builds exist, and picks the newest one this driver can run.
+Running those two commands gave PyTorch 2.14.1+cu126, which ran on the GPU, and ai-env-doctor then
+said `✓ PyTorch 2.14.1+cu126 uses the GPU`. Note the second finding: the obvious fix, "install the
+CUDA build", would have installed PyTorch 2.15, which is built only for CUDA 13 and does not run on
+this driver either. ai-env-doctor reads PyTorch's own index to know which builds exist, and picks the
+newest one this driver can run. The fix uses `uv pip` here because the environment was made by uv and
+has no pip; elsewhere it is `python -m pip`.
 
 ## What it checks
 
@@ -76,7 +80,10 @@ PyTorch's own index to know which builds exist, and picks the newest one this dr
 
 ## Safe to run
 
-- **It only reads.** It installs, removes and changes nothing; the fixes are printed for you to run.
+- **It changes nothing.** It installs, removes and writes nothing; the fixes are printed for you to
+  run. To know what PyTorch your code gets, it does run each Python it checks (your project's
+  `.venv`, the active environment, the `python` on PATH) with a short script that imports torch, from
+  a neutral folder so that your project's own files are not picked up; that is all it executes.
 - **It sends nothing about you.** The network check is one HEAD request to each of the five hosts
   above, through your proxy as pip would make it, and one GET of PyTorch's public index; nothing about
   the machine goes with them. `--offline` skips all of it.
@@ -106,10 +113,11 @@ needs fixing, 0 when not.
 ## Status
 
 0.1, in development. Tested with fake PyTorch builds of every kind (CPU, CUDA that works, CUDA that
-fails, missing GPU code, a broken import) run through the real probe, synthetic machines for every
-rule, and local stand-ins for the network checks. By hand on Windows 11 with an RTX 3060 Laptop GPU
-(driver for CUDA 12.7): PyTorch installed with a plain `pip install torch` was diagnosed as the CPU
-build, as above. macOS, Linux and WSL are covered by the tests and CI, not yet by hand.
+fails at start-up or in a kernel, missing GPU code, a broken import) run through the real probe,
+synthetic machines for every rule, and local stand-ins for the network checks. By hand on Windows 11
+with an RTX 3060 Laptop GPU (driver for CUDA 12.7), end to end: the CPU build diagnosed, the printed
+commands run, the GPU then working. CI also runs it on Linux (no GPU) and macOS (Apple M1); WSL and
+AMD GPUs are covered by the tests only.
 
 ## Develop
 

@@ -13,10 +13,11 @@ import os
 import shutil
 import subprocess
 import sys
+import tempfile
 from dataclasses import dataclass, field
 from pathlib import Path
 
-PACKAGES = ["torch", "torchvision", "torchaudio", "transformers", "accelerate", "bitsandbytes", "xformers", "flash-attn", "triton",
+PACKAGES = ["pip", "torch", "torchvision", "torchaudio", "transformers", "accelerate", "bitsandbytes", "xformers", "flash-attn", "triton",
             "vllm", "llama-cpp-python", "onnxruntime", "onnxruntime-gpu", "tensorflow", "jax", "jaxlib", "mlx", "sentence-transformers",
             "diffusers", "peft", "huggingface-hub", "numpy", "nvidia-cudnn-cu12", "nvidia-cuda-runtime-cu12"]
 
@@ -54,16 +55,17 @@ if True:  # torch is tried even without metadata: a source build or a copied fol
                 t["arch_list"] = []
             t["devices"] = []
             if t["cuda_available"]:
-                for i in range(torch.cuda.device_count()):
-                    p = torch.cuda.get_device_properties(i)
-                    t["devices"].append({"name": p.name, "memory_mb": p.total_memory // 2**20,
-                                         "capability": "%d.%d" % (p.major, p.minor)})
                 try:
-                    torch.zeros(1).cuda()
+                    for i in range(torch.cuda.device_count()):
+                        p = torch.cuda.get_device_properties(i)  # where CUDA first starts, and can fail
+                        t["devices"].append({"name": p.name, "memory_mb": p.total_memory // 2**20,
+                                             "capability": "%d.%d" % (p.major, p.minor)})
+                    # A kernel that runs on the GPU: copying memory alone would not show a missing kernel image.
+                    (torch.ones(1, device="cuda") + 1).item()
                     t["cuda_works"] = True
                 except Exception as e:
                     t["cuda_works"] = False
-                    t["cuda_error"] = repr(e)
+                    t["cuda_error"] = repr(e)[:600]
             try:
                 t["cudnn"] = torch.backends.cudnn.version() if t["cuda_available"] else None
             except Exception:
@@ -114,44 +116,61 @@ def candidates(cwd: Path | None = None) -> list[tuple[str, str, str]]:
         found = shutil.which(name)
         if found:
             out.append((found, "path", name))
+    if sys.platform == "win32" and shutil.which("py"):  # the Python launcher's default, often the Python people use
+        launched = _py_launcher_default()
+        if launched:
+            out.append((launched, "path", "py"))
     seen, unique = set(), []
     for path, why, origin in out:
-        try:
-            key = os.path.normcase(str(Path(path).resolve()))
-        except OSError:
-            key = path
+        # Not resolved: a venv's python is a link to its base interpreter, and both must be checked.
+        key = os.path.normcase(os.path.abspath(path))
         if key not in seen and Path(path).exists():
             seen.add(key)
             unique.append((path, why, origin))
     return unique
 
 
-def windows_store_stub(path: str) -> bool:
-    """The `python` that Windows puts in WindowsApps opens the Microsoft Store instead of running Python."""
-    return sys.platform == "win32" and "windowsapps" in path.lower()
+def _py_launcher_default() -> str | None:
+    try:
+        r = subprocess.run(["py", "-c", "import sys; print(sys.executable)"], capture_output=True, text=True, timeout=20,
+                           creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
+    except (OSError, subprocess.SubprocessError):
+        return None
+    path = r.stdout.strip()
+    return path if r.returncode == 0 and path else None
+
+
+def windows_store_stub(path: str, returncode: int | None = None, output: str = "") -> bool:
+    """The `python` that Windows puts in WindowsApps when no Python is installed opens the Microsoft Store
+    instead of running Python. Told by what it does (exit code 9009, or nothing but a message), not by
+    where it is: a Python really installed from the Store lives there too."""
+    return sys.platform == "win32" and "windowsapps" in path.lower() and (returncode == 9009 or "AI_ENV_DOCTOR_JSON" not in output)
 
 
 def probe(path: str, why: str = "", origin: str = "", timeout: float = 90) -> Interpreter:
     it = Interpreter(path, why, origin)
-    if windows_store_stub(path):
-        it.error = "store-stub"
-        return it
     script = f"PACKAGES = {PACKAGES!r}\n{PROBE}"
     try:
+        # From a neutral folder: with -c, the current folder comes first on sys.path, and a project's own
+        # json.py (or torch/ folder) would be imported instead of the real one.
         r = subprocess.run([path, "-c", script], capture_output=True, text=True, timeout=timeout, errors="replace",
-                           env={**os.environ, "PYTHONIOENCODING": "utf-8"}, creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
+                           cwd=tempfile.gettempdir(), env={**os.environ, "PYTHONIOENCODING": "utf-8"},
+                           creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
     except subprocess.TimeoutExpired:
         it.error = f"timed out after {timeout:g} s (importing torch can hang when a driver is stuck)"
         return it
     except OSError as e:
         it.error = str(e)
         return it
-    line = next((x for x in r.stdout.splitlines() if x.startswith("AI_ENV_DOCTOR_JSON")), None)
-    if line is None:
+    if windows_store_stub(path, r.returncode, r.stdout):
+        it.error = "store-stub"
+        return it
+    at = r.stdout.rfind("AI_ENV_DOCTOR_JSON")  # anywhere: something may print before it without a newline
+    if at < 0:
         it.error = (r.stderr or r.stdout).strip()[-600:] or f"exited with {r.returncode}"
         return it
     try:
-        it.info = json.loads(line[len("AI_ENV_DOCTOR_JSON"):])
+        it.info = json.loads(r.stdout[at + len("AI_ENV_DOCTOR_JSON"):].splitlines()[0])
     except ValueError as e:
         it.error = f"unreadable probe output ({e})"
     return it

@@ -32,9 +32,30 @@ def version_tuple(v: str | None) -> tuple[int, ...]:
     return tuple(int(x) for x in re.findall(r"\d+", v or "")[:3])
 
 
-def reinstall(python: str, tag: str) -> str:
-    q = f'"{python}"' if " " in python else python
-    return f"{q} -m pip install --force-reinstall torch torchvision torchaudio --index-url https://download.pytorch.org/whl/{tag}"
+def _quote(path: str, os_name: str) -> str:
+    return f'"{path}"' if " " in path else path
+
+
+def install_cmd(it, tag: str | None, os_name: str, reinstall: bool = True) -> str:
+    """The commands that put PyTorch's `tag` build (None: the default one) into this environment.
+
+    Uninstall first, then install: `--force-reinstall` would also reinstall every dependency at its
+    newest version (numpy 1 replaced by 2, breaking whatever needed 1). Only the torch packages that are
+    there are reinstalled. An environment made by uv has no pip: then the same with `uv pip`. On Windows
+    a quoted path needs `&` in front for PowerShell to run it."""
+    pkgs_present = (it.info or {}).get("packages") or {}
+    pkgs = ["torch"] + [p for p in ("torchvision", "torchaudio") if p in pkgs_present]
+    names = " ".join(pkgs)
+    index = f" --index-url https://download.pytorch.org/whl/{tag}" if tag else ""
+    q = _quote(it.path, os_name)
+    if "pip" in pkgs_present:
+        run = f"& {q}" if os_name == "windows" and q.startswith('"') else q
+        lines = [f"{run} -m pip uninstall -y {names}"] if reinstall else []
+        lines.append(f"{run} -m pip install {names}{index}")
+    else:
+        lines = [f"uv pip uninstall --python {q} {names}"] if reinstall else []
+        lines.append(f"uv pip install --python {q} {names}{index}")
+    return "\n".join(lines)
 
 
 class Diagnosis:
@@ -53,18 +74,21 @@ def diagnose(system, interpreters, net: dict | None = None, lang: str = "en") ->
     apple = [g for g in system.gpus if g.vendor == "apple"]
     listed_nvidia = [n for n in system.gpu_seen_by_os if "nvidia" in n.lower()]
     listed_amd = [n for n in system.gpu_seen_by_os if re.search(r"\b(amd|radeon)\b", n, re.I)]
-    cap = nvidia[0].compute_capability if nvidia else None
+    # The newest GPU decides the build: a machine with an RTX 3090 and an RTX 5090 needs one for the 5090.
+    caps = [g.compute_capability for g in nvidia if g.compute_capability]
+    cap = max(caps, key=version_tuple) if caps else None
+    top = next((g for g in nvidia if g.compute_capability == cap), nvidia[0] if nvidia else None)
     index = (net or {}).get("torch_index")
     plat = pytorch.platform_tag(system.os, system.machine)
     newest_noted = False
 
     # ---- the GPU and its driver
     if nvidia:
-        g = nvidia[0]
-        d.add("ok", "gpu-nvidia", name=g.name, memory=_gb(g.memory_mb), driver=g.driver or "?", cuda=system.driver_cuda or "?")
+        for g in nvidia:
+            d.add("ok", "gpu-nvidia", name=g.name, memory=_gb(g.memory_mb), driver=g.driver or "?", cuda=system.driver_cuda or "?")
         if system.driver_cuda and version_tuple(system.driver_cuda) < (12, 0):
             d.add("warning", "driver-old", cuda=system.driver_cuda)
-    elif system.nvidia_smi and not nvidia:
+    elif system.nvidia_smi:
         d.add("error", "nvidia-smi-failed", path=system.nvidia_smi)
     elif listed_nvidia:
         d.add("error", "wsl-no-driver" if system.wsl else "driver-missing", name=listed_nvidia[0])
@@ -74,16 +98,15 @@ def diagnose(system, interpreters, net: dict | None = None, lang: str = "en") ->
         d.add("info", "gpu-amd", name=listed_amd[0], os=system.os)
     else:
         d.add("info", "gpu-none", ram=_gb(system.ram_mb))
-    if system.rosetta:
-        d.add("error", "rosetta")
+    nvidia_expected = bool(nvidia or listed_nvidia or system.nvidia_smi)
     cvd = system.env.get("CUDA_VISIBLE_DEVICES")
     if cvd is not None and (cvd.strip() in ("", "-1", "none", "NoDevFiles") or not re.match(r"^[\w\-,\s]+$", cvd)):
         d.add("warning", "cuda-visible-devices", value=cvd)
 
     # ---- each Python environment
     usable = [it for it in interpreters if it.info]
-    if not interpreters:
-        d.add("error", "no-python")
+    if not usable:
+        d.add("error", "no-python")  # none found, or none that runs: nothing about PyTorch can be said
     stubs = [it.path for it in interpreters if it.error == "store-stub"]
     if stubs:
         d.add("warning", "store-stub", stubs[0], path="; ".join(stubs))
@@ -97,9 +120,24 @@ def diagnose(system, interpreters, net: dict | None = None, lang: str = "en") ->
         info = it.info
         if info.get("bits") == 32:
             d.add("error", "python-32bit", where, path=it.path)
+        if apple and system.os == "macos" and info.get("machine") == "x86_64":
+            d.add("error", "rosetta", where, path=it.path)  # this environment is an Intel build on Apple Silicon
+            continue
         t = info.get("torch")
+        advice = None
+        if nvidia:
+            available = pytorch.builds(index, info.get("python", ""), plat) if index and plat else None
+            advice = pytorch.advise(system.driver_cuda, cap, available)
+            if advice.newest_needs and not newest_noted:
+                newest_noted = True
+                cv = pytorch.tag_version(advice.tag)
+                d.add("info", "newest-needs-driver", newest=advice.newest, needs=advice.newest_needs, driver=system.driver_cuda,
+                      best=advice.torch, tag=advice.tag, tag_cuda=f"{cv[0]}.{cv[1]}")
+            if advice.driver_too_old:
+                d.add("error", "driver-too-old-for-gpu", where, driver=system.driver_cuda, gpu=top.name)
         if t is None:
-            d.add("info", "torch-missing", where, path=it.path, why=why_text(lang, it), python=info.get("python"))
+            fix = install_cmd(it, advice.tag if advice else None, system.os, reinstall=False) if nvidia else ""
+            d.add("info", "torch-missing", where, path=it.path, why=why_text(lang, it), python=info.get("python"), fix_cmd=fix)
             continue
         if t.get("import_error"):
             d.add("error", "torch-import", where, path=it.path, error=t["import_error"][:400])
@@ -107,54 +145,54 @@ def diagnose(system, interpreters, net: dict | None = None, lang: str = "en") ->
         ver, built = t.get("version", "?"), t.get("cuda")
         if apple and system.os == "macos":
             if not t.get("mps_built"):
-                d.add("error", "mps-not-built", where, version=ver, path=it.path)
+                d.add("error", "mps-not-built", where, version=ver, path=it.path, fix_cmd=install_cmd(it, None, system.os))
             elif not t.get("mps_available"):
                 d.add("warning", "mps-unavailable", where, version=ver)
             else:
                 d.add("ok", "torch-mps", where, version=ver, path=it.path)
             continue
         if nvidia:
-            available = pytorch.builds(index, info.get("python", ""), plat) if index and plat else None
-            advice = pytorch.advise(system.driver_cuda, cap, available)
             tag = advice.tag
-            if advice.newest_needs and not newest_noted:
-                newest_noted = True
-                cv = pytorch.tag_version(tag)
-                d.add("info", "newest-needs-driver", newest=advice.newest, needs=advice.newest_needs, driver=system.driver_cuda,
-                      best=advice.torch, tag=tag, tag_cuda=f"{cv[0]}.{cv[1]}")
-            if advice.driver_too_old:
-                d.add("error", "driver-too-old-for-gpu", where, driver=system.driver_cuda, gpu=nvidia[0].name)
             if t.get("hip"):
-                d.add("error", "torch-rocm-on-nvidia", where, version=ver, fix_cmd=reinstall(it.path, tag))
+                d.add("error", "torch-rocm-on-nvidia", where, version=ver, fix_cmd=install_cmd(it, tag, system.os))
                 continue
             if not built:
-                d.add("error", "torch-cpu", where, version=ver, gpu=nvidia[0].name, path=it.path, fix_cmd=reinstall(it.path, tag))
+                d.add("error", "torch-cpu", where, version=ver, gpu=top.name, path=it.path, fix_cmd=install_cmd(it, tag, system.os))
                 continue
             drv = version_tuple(system.driver_cuda)
             wheel = version_tuple(built)
             if drv and wheel[:1] > drv[:1]:
                 d.add("error", "wheel-major-newer", where, version=ver, wheel=built, driver=system.driver_cuda,
-                      fix_cmd=reinstall(it.path, tag))
+                      fix_cmd=install_cmd(it, tag, system.os))
                 continue
             archs = t.get("arch_list") or []
-            if cap and archs and not arch_supported(cap, archs):
-                d.add("error", "arch-missing", where, version=ver, cap=cap, archs=" ".join(archs), gpu=nvidia[0].name,
-                      fix_cmd=reinstall(it.path, tag))
+            lacking = next((g for g in nvidia if g.compute_capability and archs and not arch_supported(g.compute_capability, archs)), None)
+            if lacking:
+                d.add("error", "arch-missing", where, version=ver, cap=lacking.compute_capability, archs=" ".join(archs), gpu=lacking.name,
+                      fix_cmd=install_cmd(it, tag, system.os))
                 continue
             if not t.get("cuda_available") or t.get("cuda_works") is False:
                 reason = (t.get("cuda_error") or " ".join(t.get("warnings") or []) or "").strip()[:400]
-                newer_minor = drv and wheel > drv
+                newer_minor = bool(drv) and wheel > drv
+                if newer_minor:  # it failed on a build newer than the driver: offer one no newer, even an older PyTorch
+                    strict = pytorch.advise(system.driver_cuda, cap, available, strict=True)
+                    tag = strict.tag
                 d.add("error", "cuda-unavailable-minor" if newer_minor else "cuda-unavailable", where, version=ver, wheel=built,
-                      driver=system.driver_cuda or "?", reason=reason or "-", fix_cmd=reinstall(it.path, tag))
+                      driver=system.driver_cuda or "?", reason=reason or "-", fix_cmd=install_cmd(it, tag, system.os))
                 continue
             dev = (t.get("devices") or [{}])[0]
             d.add("ok", "torch-cuda", where, version=ver, wheel=built, gpu=dev.get("name", "?"), path=it.path)
             if drv and wheel > drv:
                 d.add("info", "wheel-minor-newer", where, wheel=built, driver=system.driver_cuda)
             continue
-        if built and not nvidia:
+        if t.get("hip"):
+            if t.get("cuda_available"):
+                d.add("ok", "torch-rocm", where, version=ver, gpu=((t.get("devices") or [{}])[0]).get("name", "?"))
+            else:
+                d.add("warning", "rocm-unavailable", where, version=ver, reason=(t.get("cuda_error") or " ".join(t.get("warnings") or []))[:300] or "-")
+        elif built and not nvidia_expected:
             d.add("info", "torch-cuda-no-gpu", where, version=ver, wheel=built)
-        else:
+        elif not built:
             d.add("info", "torch-cpu-ok", where, version=ver, path=it.path)
     _environments_disagree(d, usable)
     _packages(d, usable, system)
@@ -198,8 +236,9 @@ def arch_supported(cap: str, archs: list[str]) -> bool:
 
 
 def _environments_disagree(d: Diagnosis, usable) -> None:
-    gpu = [it for it in usable if (it.info.get("torch") or {}).get("cuda_available")]
-    cpu = [it for it in usable if it.info.get("torch") and not (it.info["torch"] or {}).get("cuda_available")]
+    working = [it for it in usable if it.info.get("torch") and not it.info["torch"].get("import_error")]
+    gpu = [it for it in working if it.info["torch"].get("cuda_available")]
+    cpu = [it for it in working if not it.info["torch"].get("cuda_available")]
     if gpu and cpu:
         d.add("info", "environments-disagree", gpu=gpu[0].path, cpu=cpu[0].path)
 

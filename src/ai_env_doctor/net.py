@@ -83,10 +83,16 @@ def proxy_problems(env: dict) -> list[tuple[str, str]]:
 
 
 def classify(e: BaseException) -> str:
+    """Why a request failed. Only a failed certificate check is "ssl": a handshake that times out or is
+    cut off (an EOF, a reset) is how a blocked host usually looks, and setting a CA bundle would not help."""
     text = repr(e).lower()
     reason = getattr(e, "reason", e)
-    if isinstance(reason, ssl.SSLError) or "certificate" in text or "ssl" in text:
+    if isinstance(reason, ssl.SSLCertVerificationError) or "certificate_verify_failed" in text or "certificate verify failed" in text:
         return "ssl"
+    if isinstance(reason, TimeoutError | socket.timeout) or "timed out" in text:
+        return "timeout"
+    if isinstance(reason, ssl.SSLError) or "eof occurred" in text or "connection reset" in text or "10054" in text:
+        return "reset"
     if isinstance(reason, socket.gaierror) or "getaddrinfo" in text or "name or service not known" in text or "nodename nor servname" in text:
         return "dns"
     if isinstance(reason, TimeoutError | socket.timeout) or "timed out" in text:

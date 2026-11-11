@@ -8,7 +8,8 @@ builds PyTorch has made is used instead.
 
 A build for CUDA 12.x runs on any driver for 12.0 or later (NVIDIA's minor version compatibility);
 13.x needs a driver for 13. Still, a build for a CUDA no newer than the driver's is the safe choice,
-and the one recommended. Blackwell GPUs (compute capability 12.0) need CUDA 12.8 or later.
+and the one recommended. Blackwell GPUs need CUDA 12.8 or later: compute capability 10.x (B200,
+GB200), 11.x and 12.x (RTX 50 series).
 """
 
 from __future__ import annotations
@@ -46,8 +47,17 @@ def platform_tag(os_name: str, machine: str) -> str | None:
     if os_name == "windows":
         return "win_amd64" if machine in ("x86_64", "amd64") else None
     if os_name == "linux":
-        return "manylinux" if machine in ("x86_64", "amd64") else "aarch64"
+        return "linux_x86_64" if machine in ("x86_64", "amd64") else "linux_aarch64"
     return None  # macOS builds are not on the CUDA index
+
+
+def _platform_matches(wheel_platform: str, plat: str) -> bool:
+    """"win_amd64" exactly; on Linux the architecture at the end of any manylinux or linux tag
+    (manylinux_2_28_x86_64, linux_x86_64 ...), never another architecture's."""
+    if plat == "win_amd64":
+        return wheel_platform == "win_amd64"
+    arch = plat.split("_", 1)[1]
+    return "linux" in wheel_platform and wheel_platform.endswith("_" + arch)
 
 
 def builds(index_html: str, python: str, plat: str) -> dict[tuple[int, ...], set[str]]:
@@ -55,7 +65,7 @@ def builds(index_html: str, python: str, plat: str) -> dict[tuple[int, ...], set
     cp = "cp" + "".join(python.split(".")[:2])
     out: dict[tuple[int, ...], set[str]] = {}
     for m in re.finditer(rf"torch-(\d+\.\d+\.\d+)%2B(cu\d+)-{cp}-{cp}t?-([\w.]+)\.whl", index_html):
-        if plat in m.group(3):
+        if any(_platform_matches(part, plat) for part in m.group(3).split(".")):
             out.setdefault(version(m.group(1)), set()).add(m.group(2))
     return out
 
@@ -69,9 +79,11 @@ class Advice:
     driver_too_old: bool = False  # no build runs on this driver (and GPU): the driver must be updated first
 
 
-def advise(driver_cuda: str | None, capability: str | None, available: dict[tuple[int, ...], set[str]] | None = None) -> Advice:
+def advise(driver_cuda: str | None, capability: str | None, available: dict[tuple[int, ...], set[str]] | None = None,
+           strict: bool = False) -> Advice:
+    """`strict`: only a build for a CUDA no newer than the driver's (after one newer failed to start)."""
     drv = version(driver_cuda)[:2] or (12, 0)
-    floor = (12, 8) if version(capability)[:1] >= (12,) else (0, 0)  # Blackwell
+    floor = (12, 8) if version(capability)[:1] >= (10,) else (0, 0)  # Blackwell: 10.x, 11.x, 12.x
 
     def pick(tags) -> str | None:
         """The build for a CUDA no newer than the driver's, the newest such; else the lowest of the
@@ -82,7 +94,7 @@ def advise(driver_cuda: str | None, capability: str | None, available: dict[tupl
         safe = [t for t in tags if tag_version(t) <= drv]
         if safe:
             return max(safe, key=tag_version)
-        compatible = [t for t in tags if tag_version(t)[0] == drv[0] and drv >= (12, 0)]
+        compatible = [t for t in tags if tag_version(t)[0] == drv[0] and drv >= (12, 0) and not strict]
         return min(compatible, key=tag_version) if compatible else None
 
     if available:
@@ -93,7 +105,7 @@ def advise(driver_cuda: str | None, capability: str | None, available: dict[tupl
                 low = tag_version(min(available[newest], key=tag_version))
                 needs = None if ver == newest else f"CUDA {low[0]}.{low[1]}"
                 return Advice(tag, ".".join(map(str, ver)), ".".join(map(str, newest)), needs)
-    tag = pick(MAINTAINED)
+    tag = pick(MAINTAINED if not strict else ["cu118", "cu121", "cu124", *MAINTAINED])  # strict: an older PyTorch, if need be
     if tag:
         return Advice(tag, None, None, None)
     # The driver is older than any build that runs on this GPU: the driver comes first.

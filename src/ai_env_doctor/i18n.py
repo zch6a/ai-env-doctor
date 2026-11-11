@@ -43,9 +43,9 @@ M: dict[str, dict[str, tuple[str, str, str]]] = {
                "(see the models below); training and large models will be slow.", ""),
         "zh": ("没有可用于 AI 的显卡：一切都在 CPU 上运行（内存 {ram}）", "小模型在 CPU 上也能用（见下面的模型）；训练和大模型会很慢。", "")},
     "rosetta": {
-        "en": ("Python runs under Rosetta (an Intel build on Apple Silicon)", "PyTorch then cannot use the Apple GPU (MPS) and runs "
+        "en": ("{path} is an Intel (x86_64) Python on Apple Silicon: it runs under Rosetta", "PyTorch then cannot use the Apple GPU (MPS) and runs "
                "several times slower.", "Install an arm64 Python (from python.org, Homebrew, or `uv python install`) and recreate the environment."),
-        "zh": ("Python 运行在 Rosetta 下（在 Apple 芯片上用的是 Intel 版）", "这样 PyTorch 用不了 Apple 显卡（MPS），速度会慢好几倍。",
+        "zh": ("{path} 是 Intel（x86_64）版的 Python，在 Apple 芯片上运行于 Rosetta 之下", "这样 PyTorch 用不了 Apple 显卡（MPS），速度会慢好几倍。",
                "安装 arm64 版的 Python（python.org、Homebrew 或 `uv python install`），然后重建环境。")},
     "cuda-visible-devices": {
         "en": ("CUDA_VISIBLE_DEVICES={value} hides the GPUs", "Programs will see no GPU, or not the one you meant.",
@@ -54,9 +54,9 @@ M: dict[str, dict[str, tuple[str, str, str]]] = {
                "取消这个变量（`unset CUDA_VISIBLE_DEVICES`，PowerShell 里是 `Remove-Item Env:CUDA_VISIBLE_DEVICES`），或者设为 0。")},
     # ---- Python
     "no-python": {
-        "en": ("No Python found", "No .venv here, no active environment, and no `python` on PATH.",
+        "en": ("No Python could be checked", "No .venv here, no active environment, and no working `python` on PATH, so nothing about PyTorch can be said.",
                "Install Python 3.10 or later, or pass the one you use with --python."),
-        "zh": ("没有找到 Python", "这里没有 .venv，也没有激活的环境，PATH 上也没有 `python`。", "安装 Python 3.10 或更高版本，或者用 --python 指定你用的那个。")},
+        "zh": ("没有能检查的 Python", "这里没有 .venv，也没有激活的环境，PATH 上也没有能运行的 `python`，所以无法判断 PyTorch 的情况。", "安装 Python 3.10 或更高版本，或者用 --python 指定你用的那个。")},
     "store-stub": {
         "en": ("`python` on PATH is the Microsoft Store placeholder ({path})", "It opens the Store instead of running Python, so scripts "
                "that call `python` fail.", "Install Python (python.org or `winget install Python.Python.3.12`), or turn off the "
@@ -70,8 +70,9 @@ M: dict[str, dict[str, tuple[str, str, str]]] = {
         "en": ("{path} is a 32-bit Python", "PyTorch and most AI packages exist only for 64-bit Python.", "Install a 64-bit Python 3.10 or later."),
         "zh": ("{path} 是 32 位的 Python", "PyTorch 和大多数 AI 包只有 64 位版本。", "安装 64 位的 Python 3.10 或更高版本。")},
     "torch-missing": {
-        "en": ("PyTorch is not installed in {why}", "Python {python} at {path}.", ""),
-        "zh": ("{why}里没有安装 PyTorch", "Python {python}，位于 {path}。", "")},
+        "en": ("PyTorch is not installed in {why}", "Python {python} at {path}. If you need it there, this installs the build for your GPU:",
+               "{fix_cmd}"),
+        "zh": ("{why}里没有安装 PyTorch", "Python {python}，位于 {path}。如果要在这里用，下面的命令会装上适合你显卡的版本：", "{fix_cmd}")},
     "torch-import": {
         "en": ("PyTorch is installed in {path} but fails to import", "{error}",
                "Reinstall it in that environment (see " + WHEEL_HELP + "); a DLL error on Windows often means the Microsoft Visual C++ "
@@ -81,9 +82,9 @@ M: dict[str, dict[str, tuple[str, str, str]]] = {
                "https://aka.ms/vs/17/release/vc_redist.x64.exe")},
     "mps-not-built": {
         "en": ("PyTorch {version} in {path} has no Apple GPU support", "This build cannot use MPS.",
-               "Reinstall a standard macOS arm64 build: `pip install --force-reinstall torch torchvision torchaudio`"),
+               "Reinstall a standard macOS arm64 build: {fix_cmd}"),
         "zh": ("{path} 里的 PyTorch {version} 不支持 Apple 显卡", "这个版本用不了 MPS。",
-               "重装标准的 macOS arm64 版：`pip install --force-reinstall torch torchvision torchaudio`")},
+               "重装标准的 macOS arm64 版：{fix_cmd}")},
     "mps-unavailable": {
         "en": ("PyTorch {version} supports MPS, but it is not available", "MPS needs macOS 12.3 or later on Apple Silicon.",
                "Update macOS, and make sure Python is not running under Rosetta."),
@@ -141,6 +142,13 @@ M: dict[str, dict[str, tuple[str, str, str]]] = {
         "en": ("The PyTorch build (CUDA {wheel}) is newer than the driver (CUDA {driver}); it works now",
                "Some features (compiling new kernels at run time) may need the newer driver.", f"Updating the driver avoids surprises: {DRIVERS}"),
         "zh": ("PyTorch 版本（CUDA {wheel}）比驱动（CUDA {driver}）新；目前能用", "部分功能（运行时编译新内核）可能需要新驱动。", f"更新驱动可以避免意外：{DRIVERS}")},
+    "torch-rocm": {
+        "en": ("PyTorch {version} uses the AMD GPU ({gpu}, ROCm)", "", ""),
+        "zh": ("PyTorch {version} 能使用 AMD 显卡（{gpu}，ROCm）", "", "")},
+    "rocm-unavailable": {
+        "en": ("PyTorch {version} is the ROCm build, but it cannot use the GPU", "PyTorch said: {reason}",
+               "Check that this GPU is supported by this ROCm version: https://rocm.docs.amd.com"),
+        "zh": ("PyTorch {version} 是 ROCm 版，但用不了显卡", "PyTorch 的提示：{reason}", "确认这块显卡受这个 ROCm 版本支持：https://rocm.docs.amd.com")},
     "torch-cuda-no-gpu": {
         "en": ("PyTorch {version} is a CUDA {wheel} build, but there is no NVIDIA GPU", "It runs on the CPU, with a larger download than needed.", ""),
         "zh": ("PyTorch {version} 是 CUDA {wheel} 版，但这台电脑没有 NVIDIA 显卡", "它会在 CPU 上运行，只是安装包比需要的大。", "")},
@@ -212,6 +220,10 @@ M: dict[str, dict[str, tuple[str, str, str]]] = {
         "en": ("{host}: the certificate check failed", "{error}. Usually a company network that inspects HTTPS.",
                "Point REQUESTS_CA_BUNDLE and SSL_CERT_FILE (and pip's `cert` setting) at your organization's CA file."),
         "zh": ("{host}：证书校验失败", "{error}。通常是单位网络在检查 HTTPS 流量。", "把 REQUESTS_CA_BUNDLE 和 SSL_CERT_FILE（以及 pip 的 cert 设置）指向你们单位的 CA 证书。")},
+    "net-reset": {
+        "en": ("{host}: the connection was cut off during the secure handshake: no {purpose}",
+               "{error}. This is how a blocked host usually looks; it is not a certificate problem.", "Set HTTPS_PROXY, or use a mirror."),
+        "zh": ("{host}：安全握手时连接被切断：无法获取{purpose}", "{error}。这通常意味着这个地址被屏蔽了，不是证书问题。", "设置 HTTPS_PROXY，或者使用镜像。")},
     "net-proxy": {
         "en": ("{host}: the proxy refused the request", "{error}", "Check the proxy address and, if it needs one, the user name and password."),
         "zh": ("{host}：代理拒绝了请求", "{error}", "检查代理地址；如果需要账号，检查用户名和密码。")},

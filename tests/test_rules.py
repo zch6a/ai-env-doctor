@@ -86,8 +86,11 @@ def test_apple_silicon_and_rosetta():
     mac = System("macos", "14.5", "arm64", ram_mb=16 * 1024, cpu="Apple M3", gpus=[GPU("apple", "Apple M3", 10813)])
     good = {"version": "2.15.0", "cuda": None, "mps_built": True, "mps_available": True}
     assert "torch-mps" in ids(diagnose(mac, [py(good)]), "ok")
-    mac.rosetta = True
-    assert "rosetta" in ids(diagnose(mac, [py({**good, "mps_available": False})]), "error")
+    mac.rosetta = True  # the doctor itself under Rosetta says nothing about an arm64 environment
+    arm = diagnose(mac, [py(good, machine="arm64")])
+    assert "torch-mps" in ids(arm, "ok") and "rosetta" not in ids(arm)
+    intel = diagnose(mac, [py({**good, "mps_available": False}, machine="x86_64")])
+    assert "rosetta" in ids(intel, "error") and "mps-unavailable" not in ids(intel), "said once, as the cause"
 
 
 def test_python_problems():

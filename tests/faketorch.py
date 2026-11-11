@@ -37,10 +37,17 @@ cuda = _Cuda()
 
 class _Tensor:
     def cuda(self):
+        return self
+    def __add__(self, other):
         {tensor_cuda_body}
         return self
+    def item(self):
+        return 2.0
 
-def zeros(*a):
+def zeros(*a, **kw):
+    return _Tensor()
+
+def ones(*a, **kw):
     return _Tensor()
 
 class _Cudnn:
@@ -66,7 +73,8 @@ backends = _Backends()
 
 
 def make_torch(folder: Path, *, version="2.14.1+cu126", cuda="12.6", available=True, archs=("sm_75", "sm_80", "sm_86", "sm_90"),
-               gpu="NVIDIA GeForce RTX 3060 Laptop GPU", mps=False, cuda_fails=False, warn=None, import_error=None) -> Path:
+               gpu="NVIDIA GeForce RTX 3060 Laptop GPU", mps=False, cuda_fails=False, warn=None, import_error=None,
+               props_fail=False, noise=False) -> Path:
     pkg = folder / "torch"
     pkg.mkdir(parents=True, exist_ok=True)
     if import_error:
@@ -74,6 +82,10 @@ def make_torch(folder: Path, *, version="2.14.1+cu126", cuda="12.6", available=T
         return folder
     body = "return True" if available else ("import warnings; warnings.warn(%r); return False" % (warn or "CUDA driver version is insufficient"))
     extra = ""
+    if props_fail:  # CUDA starts here, and can fail ("CUDA error: unknown error" after a suspend)
+        extra += "\ndef _fail(i):\n    raise RuntimeError('CUDA error: unknown error')\ncuda.get_device_properties = _fail\n"
+    if noise:  # something printing at import, with no newline
+        extra += "\nimport sys\nsys.stdout.write('loading...')\n"
     (pkg / "__init__.py").write_text(TEMPLATE.format(version=version, cuda=cuda, available_body=body, archs=list(archs), gpu=gpu, mps=mps,
                                                      tensor_cuda_body="raise RuntimeError('no kernel image is available')" if cuda_fails else "pass",
                                                      extra=extra), encoding="utf-8")

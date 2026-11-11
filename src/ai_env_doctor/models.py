@@ -1,7 +1,7 @@
 """Which well-known local models this machine can run, with Ollama.
 
 The list is short on purpose (a few dozen widely used models, by use), with approximate download sizes
-of Ollama's default 4-bit builds as of late 2026; check `ollama show` for the exact numbers. For a full
+of Ollama's default builds as of late 2026 (4-bit for the language models, 16-bit for embeddings); check `ollama show` for the exact numbers. For a full
 catalogue with speed estimates, see llmfit (https://github.com/AlexsJones/llmfit).
 
 A model "fits" when its weights plus room for a 4K-token context and the runtime (about 1 GB and 10%)
@@ -57,6 +57,7 @@ class Fit:
 
 def plan(system) -> Fit:
     nvidia = [g for g in system.gpus if g.vendor == "nvidia" and g.memory_mb]
+    unified = [g for g in system.gpus if g.vendor == "nvidia" and not g.memory_mb]  # GB10 and the like: nvidia-smi says [N/A]
     apple = [g for g in system.gpus if g.vendor == "apple" and g.memory_mb]
     ram_gb = (system.ram_mb or 0) / 1024
     if nvidia:
@@ -65,6 +66,8 @@ def plan(system) -> Fit:
         device, spill = "gpu", max(0.0, ram_gb * 0.6 - 2)
     elif apple:
         memory, device, spill = apple[0].memory_mb / 1024, "apple", 0.0
+    elif unified and ram_gb:
+        memory, device, spill = ram_gb * 0.75, "gpu", 0.0
     else:
         memory, device, spill = max(0.0, ram_gb * 0.7 - 2), "cpu", 0.0
     full, partial = {}, {}

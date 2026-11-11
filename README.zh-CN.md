@@ -20,20 +20,21 @@
 uvx --from git+https://github.com/zch6a/ai-env-doctor ai-env-doctor
 ```
 
-在一台用 `pip install torch` 默认方式装了 PyTorch 的笔记本上：
+在一台用 `uv pip install torch` 默认方式装了 PyTorch 的笔记本上：
 
 ```text
 检查结果:
   ✗ C:\proj\.venv\Scripts\python.exe 里的 PyTorch 2.15.0+cpu 是纯 CPU 版：用不了 NVIDIA GeForce RTX 3060 Laptop GPU
       这是 torch.cuda.is_available() 为 False 最常见的原因：不指定 PyTorch 自己的源直接 `pip install torch`，在 Windows 上装到的就是 CPU 版（uv 在任何系统上都可能选中它）。
-      解决: C:\proj\.venv\Scripts\python.exe -m pip install --force-reinstall torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu126
+      解决: uv pip uninstall --python C:\proj\.venv\Scripts\python.exe torch
+           uv pip install --python C:\proj\.venv\Scripts\python.exe torch --index-url https://download.pytorch.org/whl/cu126
   · 最新的 PyTorch（2.15.0）需要支持 CUDA 13.2 的驱动；当前驱动只支持 CUDA 12.7
       这个驱动能跑的最新 PyTorch 是 2.14.1（CUDA 12.6，cu126）；这里给出的命令装的就是它。
       解决: 要用 PyTorch 2.15.0，请更新驱动：https://www.nvidia.com/drivers
   ✓ NVIDIA 显卡：NVIDIA GeForce RTX 3060 Laptop GPU（6.0 GB），驱动 566.36，最高支持 CUDA 12.7
 ```
 
-注意第二条：最直接的修法“装 CUDA 版”会装上 PyTorch 2.15，而它只有 CUDA 13 的版本，在这个驱动上同样用不了。ai-env-doctor 会读取 PyTorch 自己的软件源，知道到底有哪些版本，再挑出这个驱动能跑的最新那个。
+运行这两条命令后装上了 PyTorch 2.14.1+cu126，能在显卡上运行，ai-env-doctor 随后显示 `✓ PyTorch 2.14.1+cu126 能使用显卡`。注意第二条：最直接的修法“装 CUDA 版”会装上 PyTorch 2.15，而它只有 CUDA 13 的版本，在这个驱动上同样用不了。ai-env-doctor 会读取 PyTorch 自己的软件源，知道到底有哪些版本，再挑出这个驱动能跑的最新那个。这里的命令用的是 `uv pip`，因为这个环境是 uv 建的、没有 pip；其他情况下是 `python -m pip`。
 
 ## 检查什么
 
@@ -53,7 +54,7 @@ uvx --from git+https://github.com/zch6a/ai-env-doctor ai-env-doctor
 
 ## 放心运行
 
-- **只读。** 不安装、不删除、不修改任何东西；修复命令只是打印出来，由你自己决定是否运行。
+- **不改动任何东西。** 不安装、不删除、不写入任何东西；修复命令只是打印出来，由你自己决定是否运行。为了知道你的代码用的是哪个 PyTorch，它会运行它检查的每个 Python（项目的 `.venv`、当前激活的环境、PATH 上的 `python`），执行一小段导入 torch 的脚本；这段脚本在一个无关的文件夹里运行，不会误用你项目里的文件。这就是它执行的全部内容。
 - **不发送任何关于你的信息。** 网络检查只是向上面五个地址各发一个 HEAD 请求（和 pip 一样走你的代理），再读取一次 PyTorch 公开的软件源列表；请求里不带任何关于这台电脑的信息。加 `--offline` 就全部跳过。
 - **代理地址里的密码会被隐藏**，无论是报告还是 `--json`，都可以直接贴到问题反馈里。
 - 没有任何依赖：只是 Python 3.10+ 的标准库，所以 `uvx` 一两秒就能启动。
@@ -78,7 +79,7 @@ ai-env-doctor --json             # 输出所有检查结果，便于脚本处理
 
 ## 状态
 
-0.1，开发中。用各种假的 PyTorch 版本（CPU 版、CUDA 正常、CUDA 启动失败、缺少显卡代码、导入失败）测试真实的探测程序，用合成的机器测试每条规则，用本地的模拟服务测试网络检查。在 Windows 11、RTX 3060 笔记本显卡（驱动支持 CUDA 12.7）上手动试过：用 `pip install torch` 默认方式装的 PyTorch 被正确诊断为 CPU 版，如上所示。macOS、Linux 和 WSL 由测试和 CI 覆盖，还没有手动试过。
+0.1，开发中。用各种假的 PyTorch 版本（CPU 版、CUDA 正常、CUDA 在启动时或运行内核时失败、缺少显卡代码、导入失败）测试真实的探测程序，用合成的机器测试每条规则，用本地的模拟服务测试网络检查。在 Windows 11、RTX 3060 笔记本显卡（驱动支持 CUDA 12.7）上完整地手动试过：诊断出 CPU 版、运行打印出来的命令、之后显卡可以正常使用。CI 还在 Linux（无显卡）和 macOS（Apple M1）上运行它；WSL 和 AMD 显卡只由测试覆盖。
 
 ## 开发
 
