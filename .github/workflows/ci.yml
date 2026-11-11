@@ -1,0 +1,21 @@
+name: CI
+on: [push, pull_request]
+jobs:
+  test:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+        python: ["3.10", "3.13"]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+        with:
+          python-version: ${{ matrix.python }}
+          activate-environment: true
+      - run: uv pip install -e . pytest ruff
+      - run: uv run --no-project pytest -q
+      - run: uv run --no-project ruff check src tests
+      # The doctor on the runner itself (no GPU there): it must run and report, whatever it finds.
+      - run: uv run --no-project ai-env-doctor --offline --lang en || true
