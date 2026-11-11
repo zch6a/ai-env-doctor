@@ -9,6 +9,7 @@ is checked, from a table otherwise.
 from __future__ import annotations
 
 import re
+import shlex
 from dataclasses import dataclass, field
 
 from . import pytorch
@@ -32,8 +33,38 @@ def version_tuple(v: str | None) -> tuple[int, ...]:
     return tuple(int(x) for x in re.findall(r"\d+", v or "")[:3])
 
 
+# Where the fix for a Python pip may not touch (PEP 668) puts a virtual environment instead. PowerShell
+# expands $HOME in arguments, and runs a path that starts with a variable only after `&`.
+VENV = {"windows": {"dir": r"$HOME\.venvs\ai", "run": r'& "$HOME\.venvs\ai\Scripts\python.exe"', "python": r"$HOME\.venvs\ai\Scripts\python.exe"},
+        "posix": {"dir": "~/.venvs/ai", "run": "~/.venvs/ai/bin/python", "python": "~/.venvs/ai/bin/python"}}
+VENV["linux"] = VENV["macos"] = VENV["posix"]
+
+_PLAIN_WINDOWS = re.compile(r"[\w\-.:\\/]+")
+
+
 def _quote(path: str, os_name: str) -> str:
-    return f'"{path}"' if " " in path else path
+    """A path as one word for the shell the user will paste into: PowerShell on Windows (single quotes,
+    in which only ' is special and is doubled; double quotes would expand $name and backticks), a POSIX
+    shell elsewhere."""
+    if os_name == "windows":
+        return path if _PLAIN_WINDOWS.fullmatch(path) else "'" + path.replace("'", "''") + "'"
+    return shlex.quote(path)
+
+
+def _run(path: str, os_name: str) -> str:
+    """The interpreter as a command: PowerShell runs a quoted path only after `&`."""
+    q = _quote(path, os_name)
+    return f"& {q}" if os_name == "windows" and q.startswith("'") else q
+
+
+def _then(first: str, rest: list[str], os_name: str) -> str:
+    """`first`, and if it succeeds `rest`, on one line: conda asks before removing anything, and a pasted
+    next line would otherwise be read as the answer. Windows PowerShell 5.1 has no &&."""
+    if not rest:
+        return first
+    if os_name == "windows":
+        return f"{first}; if ($?) {{ {'; '.join(rest)} }}"
+    return " && ".join([first, *rest])
 
 
 def install_cmd(it, tag: str | None, os_name: str, reinstall: bool = True) -> str:
@@ -41,37 +72,30 @@ def install_cmd(it, tag: str | None, os_name: str, reinstall: bool = True) -> st
 
     Uninstall first, then install: `--force-reinstall` would also reinstall every dependency at its
     newest version (numpy 1 replaced by 2, breaking whatever needed 1). Only the torch packages that are
-    there are reinstalled. An environment made by uv has no pip: then the same with `uv pip`. On Windows
-    a quoted path needs `&` in front for PowerShell to run it."""
-    pkgs_present = (it.info or {}).get("packages") or {}
+    there are reinstalled. An environment made by uv has no pip: then the same with `uv pip`."""
+    info = it.info or {}
+    pkgs_present = info.get("packages") or {}
     pkgs = ["torch"] + [p for p in ("torchvision", "torchaudio") if p in pkgs_present]
-    names = " ".join(pkgs)
     index = f" --index-url https://download.pytorch.org/whl/{tag}" if tag else ""
-    q = _quote(it.path, os_name)
+    q, run = _quote(it.path, os_name), _run(it.path, os_name)
+    if info.get("externally_managed"):
+        # PEP 668: pip (and uv) refuse to install into the system's Python; a virtual environment for AI work instead.
+        return f"{run} -m venv {VENV[os_name]['dir']}\n{VENV[os_name]['run']} -m pip install {' '.join(pkgs)}{index}"
     conda = conda_torch(it)
     if conda:
         # Installed by conda: pip cannot remove it ("RECORD file not found ... installed by conda"), and
         # cpuonly would keep pulling the CPU build back. conda removes them (it lists what and asks), then
         # pip installs from PyTorch's index, as PyTorch itself now recommends inside conda.
-        prefix = _quote(it.info["conda"]["prefix"], os_name)
         pkgs = ["torch"] + [p for p in ("torchvision", "torchaudio") if p in pkgs_present or p in conda]
-        names = " ".join(pkgs)
-        lines = [f"conda remove -p {prefix} {' '.join(conda)}"] if reinstall else []
-        by_pip = [p for p in ("torch", "torchvision", "torchaudio") if p in pkgs_present
-                  and {"torch": "pytorch"}.get(p, p) not in conda]  # e.g. cpuonly from conda, torch from pip
-        run = f"& {q}" if os_name == "windows" and q.startswith('"') else q
-        if reinstall and by_pip:
-            lines.append(f"{run} -m pip uninstall -y {' '.join(by_pip)}" if "pip" in pkgs_present
-                         else f"uv pip uninstall --python {q} {' '.join(by_pip)}")
-        lines.append(f"{run} -m pip install {names}{index}" if "pip" in pkgs_present else f"uv pip install --python {q} {names}{index}")
-        return "\n".join(lines)
-    if "pip" in pkgs_present:
-        run = f"& {q}" if os_name == "windows" and q.startswith('"') else q
-        lines = [f"{run} -m pip uninstall -y {names}"] if reinstall else []
-        lines.append(f"{run} -m pip install {names}{index}")
-    else:
-        lines = [f"uv pip uninstall --python {q} {names}"] if reinstall else []
-        lines.append(f"uv pip install --python {q} {names}{index}")
+    by_pip = [p for p in pkgs if p in pkgs_present and {"torch": "pytorch"}.get(p, p) not in conda]
+    names = " ".join(pkgs)
+    lines = []
+    if reinstall and by_pip:
+        lines.append(f"{run} -m pip uninstall -y {' '.join(by_pip)}" if "pip" in pkgs_present
+                     else f"uv pip uninstall --python {q} {' '.join(by_pip)}")
+    lines.append(f"{run} -m pip install {names}{index}" if "pip" in pkgs_present else f"uv pip install --python {q} {names}{index}")
+    if conda and reinstall:
+        return _then(f"conda remove -p {_quote(info['conda']['prefix'], os_name)} {' '.join(conda)}", lines, os_name)
     return "\n".join(lines)
 
 
@@ -79,7 +103,7 @@ def conda_torch(it) -> list[str]:
     """The torch packages conda installed in this environment, in the order to name them to `conda remove`;
     empty when PyTorch there came from pip (or there is no conda)."""
     mine = (((it.info or {}).get("conda") or {}).get("packages")) or {}
-    if not ({"pytorch", "libtorch", "cpuonly"} & set(mine)):
+    if not ({"pytorch", "libtorch", "cpuonly", "torchvision", "torchaudio"} & set(mine)):
         return []
     order = ("pytorch", "torchvision", "torchaudio", "cpuonly", "pytorch-cuda", "pytorch-gpu", "pytorch-cpu", "libtorch")
     return [p for p in order if p in mine]
@@ -101,6 +125,13 @@ def diagnose(system, interpreters, net: dict | None = None, lang: str = "en") ->
     apple = [g for g in system.gpus if g.vendor == "apple"]
     listed_nvidia = [n for n in system.gpu_seen_by_os if "nvidia" in n.lower()]
     listed_amd = [n for n in system.gpu_seen_by_os if re.search(r"\b(amd|radeon)\b", n, re.I)]
+    # Ryzen laptops' integrated graphics ("AMD Radeon(TM) Graphics", "Radeon 780M", "Cezanne [Radeon Vega]")
+    # are not ROCm targets; Strix Halo's Radeon 8060S is, and does not match.
+    discrete_amd = [n for n in listed_amd if not INTEGRATED_AMD.search(n)]
+    working = [it for it in interpreters if it.info and isinstance(it.info.get("torch"), dict)
+               and it.info["torch"].get("cuda") and _gpu_works(it.info["torch"])]
+    mac_metal = system.os == "macos" and not [g for g in system.gpus if g.vendor == "apple"] and any(
+        isinstance((it.info or {}).get("torch"), dict) and it.info["torch"].get("mps_available") for it in interpreters)
     # The newest GPU decides the build: a machine with an RTX 3090 and an RTX 5090 needs one for the 5090.
     caps = [g.compute_capability for g in nvidia if g.compute_capability]
     cap = max(caps, key=version_tuple) if caps else None
@@ -117,12 +148,23 @@ def diagnose(system, interpreters, net: dict | None = None, lang: str = "en") ->
             d.add("warning", "driver-old", cuda=system.driver_cuda)
     elif system.nvidia_smi:
         d.add("error", "nvidia-smi-failed", path=system.nvidia_smi)
+    elif getattr(system, "wsl1", False):
+        d.add("error", "wsl1", distro=system.env.get("WSL_DISTRO_NAME") or "<distro>")  # WSL 1 has no GPU at all
+    elif listed_nvidia and getattr(system, "container", False):
+        d.add("error", "container-no-gpu", name=listed_nvidia[0])  # the host's GPU, not passed in
+    elif listed_nvidia and (working or getattr(system, "nvidia_kernel_driver", None)
+                            or (system.os == "windows" and any(not n.startswith("NVIDIA GPU (") for n in listed_nvidia))):
+        # The driver is there (a CUDA PyTorch runs, the kernel module is loaded, Windows names the GPU),
+        # only nvidia-smi is not: nothing to install, the CUDA version just could not be read.
+        d.add("warning", "nvidia-smi-missing", name=listed_nvidia[0], os=system.os)
     elif listed_nvidia:
         d.add("error", "wsl-no-driver" if system.wsl else "driver-missing", name=listed_nvidia[0])
     elif apple:
         d.add("ok", "gpu-apple", name=apple[0].name, memory=_gb(apple[0].memory_mb))
-    elif listed_amd:
-        d.add("info", "gpu-amd", name=listed_amd[0], os=system.os)
+    elif discrete_amd:
+        d.add("info", "gpu-amd", name=discrete_amd[0], os=system.os)
+    elif mac_metal:
+        d.add("ok", "gpu-mac-metal")  # an Intel Mac's AMD GPU, which PyTorch uses through Metal
     elif getattr(system, "wsl_gpu", False) and not system.gpu_seen_by_os:
         d.add("info", "wsl-gpu-unknown", ram=_gb(system.ram_mb))  # a GPU, but Windows could not be asked whose
     else:
@@ -131,6 +173,8 @@ def diagnose(system, interpreters, net: dict | None = None, lang: str = "en") ->
     cvd = system.env.get("CUDA_VISIBLE_DEVICES")
     if cvd is not None and (cvd.strip() in ("", "-1", "none", "NoDevFiles") or not re.match(r"^[\w\-,\s]+$", cvd)):
         d.add("warning", "cuda-visible-devices", value=cvd)
+    elif cvd and nvidia and re.fullmatch(r"[\d,\s]+", cvd) and any(int(i) >= len(nvidia) for i in re.findall(r"\d+", cvd)):
+        d.add("warning", "cuda-visible-devices-range", value=cvd, count=len(nvidia))  # CUDA_VISIBLE_DEVICES=1 with one GPU
 
     # ---- each Python environment
     usable = [it for it in interpreters if it.info]
@@ -214,18 +258,41 @@ def diagnose(system, interpreters, net: dict | None = None, lang: str = "en") ->
             if drv and wheel > drv:
                 d.add("info", "wheel-minor-newer", where, wheel=built, driver=system.driver_cuda)
             continue
+        # No GPU from nvidia-smi: none, AMD, or an NVIDIA GPU whose nvidia-smi is missing (or whose driver is).
+        no_smi_advice = None
+        if nvidia_expected:
+            no_smi_advice = pytorch.advise(None, None, pytorch.builds(index, info.get("python", ""), plat) if index and plat else None)
+        amd_fix = _amd_fix(lang, system) if discrete_amd else ""
         if t.get("hip"):
             if t.get("cuda_available"):
                 d.add("ok", "torch-rocm", where, version=ver, gpu=((t.get("devices") or [{}])[0]).get("name", "?"))
             else:
                 d.add("warning", "rocm-unavailable", where, version=ver, reason=(t.get("cuda_error") or " ".join(t.get("warnings") or []))[:300] or "-")
-        elif built and not nvidia_expected:
+        elif built and _gpu_works(t):  # it runs on the GPU, whatever nvidia-smi said
+            dev = (t.get("devices") or [{}])[0]
+            d.add("ok", "torch-cuda", where, version=ver, wheel=built, gpu=dev.get("name", "?"), path=it.path)
+        elif built and nvidia_expected:
+            if not any(f.id in ("driver-missing", "wsl-no-driver", "wsl1", "container-no-gpu") for f in d.findings):
+                reason = (t.get("cuda_error") or " ".join(t.get("warnings") or []) or "").strip()[:400]
+                d.add("error", "cuda-unavailable", where, version=ver, wheel=built, driver="?", reason=reason or "-",
+                      fix_cmd=install_cmd(it, no_smi_advice.tag, system.os))
+        elif built and discrete_amd:
+            d.add("warning", "torch-cuda-on-amd", where, version=ver, wheel=built, gpu=discrete_amd[0], amd_fix=amd_fix)
+        elif built:
             d.add("info", "torch-cuda-no-gpu", where, version=ver, wheel=built)
-        elif not built and listed_amd and system.os in ("linux", "windows"):
-            d.add("info", "torch-cpu-amd-windows" if system.os == "windows" else "torch-cpu-amd", where, version=ver, path=it.path,
-                  gpu=listed_amd[0])
-        elif not built:
+        elif nvidia_expected:
+            d.add("error", "torch-cpu", where, version=ver, gpu=listed_nvidia[0], path=it.path,
+                  fix_cmd=install_cmd(it, no_smi_advice.tag, system.os))
+        elif discrete_amd and system.os in ("linux", "windows"):
+            d.add("info", _amd_id(system), where, version=ver, path=it.path, gpu=discrete_amd[0])
+        elif mac_metal and t.get("mps_available"):
+            d.add("ok", "torch-mps-metal", where, version=ver, path=it.path)
+        else:
             d.add("info", "torch-cpu-ok", where, version=ver, path=it.path)
+    for it in usable:
+        if it.info.get("externally_managed") and any(f.where == it.path and "-m venv" in f.fix for f in d.findings):
+            d.add("info", "externally-managed", it.path, path=it.path, venv=VENV.get(system.os, VENV["posix"])["dir"],
+                  venv_python=VENV.get(system.os, VENV["posix"])["python"])
     for it in usable:  # why a fix starts with `conda remove`, said once per environment
         conda = conda_torch(it)
         if conda and any(f.where == it.path and "conda remove" in f.fix for f in d.findings):
@@ -245,6 +312,25 @@ def diagnose(system, interpreters, net: dict | None = None, lang: str = "en") ->
             d.add("warning", "disk-low", cache={"huggingface": "Hugging Face", "ollama": "Ollama"}.get(name, name), free=_gb(free))
     order = {lv: i for i, lv in enumerate(LEVELS)}
     return sorted(d.findings, key=lambda f: order[f.level])
+
+
+INTEGRATED_AMD = re.compile(r"Radeon(\(TM\))? Graphics\b|Radeon(\(TM\))? \d{3}M\b|Vega \d+ Graphics|"
+                            r"\b(Cezanne|Renoir|Rembrandt|Phoenix|Barcelo|Lucienne|Picasso|Raven|Mendocino|Hawk Point|Van Gogh)\b", re.I)
+
+
+def _gpu_works(t: dict) -> bool:
+    """CUDA is available and the test kernel did not fail (absent: not tried, as with an old probe)."""
+    return bool(t.get("cuda_available")) and t.get("cuda_works") is not False
+
+
+def _amd_id(system) -> str:
+    if system.wsl:
+        return "torch-cpu-amd-wsl"  # ROCm in WSL comes from the Windows driver: no amdgpu inside
+    return "torch-cpu-amd-windows" if system.os == "windows" else "torch-cpu-amd"
+
+
+def _amd_fix(lang: str, system) -> str:
+    return msg(lang, _amd_id(system), version="", path="", gpu="")[2]
 
 
 def why_text(lang: str, it) -> str:
@@ -275,8 +361,8 @@ def arch_supported(cap: str, archs: list[str]) -> bool:
 
 def _environments_disagree(d: Diagnosis, usable) -> None:
     working = [it for it in usable if it.info.get("torch") and not it.info["torch"].get("import_error")]
-    gpu = [it for it in working if it.info["torch"].get("cuda_available")]
-    cpu = [it for it in working if not it.info["torch"].get("cuda_available")]
+    gpu = [it for it in working if _gpu_works(it.info["torch"])]
+    cpu = [it for it in working if not _gpu_works(it.info["torch"])]
     if gpu and cpu:
         d.add("info", "environments-disagree", gpu=gpu[0].path, cpu=cpu[0].path)
 

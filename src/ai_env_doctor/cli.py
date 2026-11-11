@@ -144,13 +144,14 @@ def main(argv: list[str] | None = None) -> int:
         print(f"ai-env-doctor: could not finish: {type(e).__name__}: {e} (AI_ENV_DOCTOR_DEBUG=1 for details; please report it)", file=sys.stderr)
         return 2
     if args.json:
-        print(json.dumps({"version": __version__, "system": system.to_dict(),
+        print(json.dumps({"schema": 1, "version": __version__, "system": system.to_dict(),  # docs/json.md
                           "pythons": [asdict(i) for i in interpreters],
                           "network": {"proxy_problems": net_facts["proxy_problems"], "reach": [asdict(r) for r in net_facts["reach"]],
                                       "ollama": net_facts["ollama"], "pytorch_index_read": bool(net_facts.get("torch_index"))},
                           "findings": [asdict(f) for f in findings],
                           "models": {"device": fit.device, "memory_gb": round(fit.memory_gb, 1),
-                                     "fits": {u: m.tag for u, m in fit.full.items()}, "split": {u: m.tag for u, m in fit.partial.items()}}},
+                                     "fits": {u: m.tag for u, m in fit.full.items()}, "split": {u: m.tag for u, m in fit.partial.items()},
+                                     "as_of": models.CATALOG_AS_OF.strftime("%Y-%m")}},
                          ensure_ascii=False, indent=2, default=str))
     else:
         print(report(system, findings, fit, lang, sys.stdout.isatty() and not os.environ.get("NO_COLOR"), not args.offline))

@@ -27,9 +27,10 @@ M: dict[str, dict[str, tuple[str, str, str]]] = {
         "zh": ("有 {name}，但没有装 NVIDIA 驱动", "没有驱动，任何程序都用不了这块显卡。", f"安装驱动：{DRIVERS}")},
     "wsl-no-driver": {
         "en": ("WSL cannot see the NVIDIA GPU ({name})", "In WSL the GPU comes from the Windows driver; a Linux NVIDIA driver must not be "
-               "installed inside WSL.", f"Install or update the driver in Windows ({DRIVERS}), then run `wsl --update` and `wsl --shutdown`."),
+               "installed inside WSL.", f"Install or update the driver in Windows ({DRIVERS}), then in Windows PowerShell (not in WSL) run `wsl --update` and "
+               "`wsl --shutdown`."),
         "zh": ("WSL 看不到 NVIDIA 显卡（{name}）", "WSL 里的显卡来自 Windows 的驱动；不要在 WSL 里面装 Linux 版的 NVIDIA 驱动。",
-               f"在 Windows 里安装或更新驱动（{DRIVERS}），然后运行 `wsl --update` 和 `wsl --shutdown`。")},
+               f"在 Windows 里安装或更新驱动（{DRIVERS}），然后在 Windows 的 PowerShell 里（不是 WSL 里）运行 `wsl --update` 和 `wsl --shutdown`。")},
     "gpu-apple": {
         "en": ("Apple GPU: {name}, about {memory} of memory it may use", "", ""),
         "zh": ("Apple 显卡：{name}，可用内存约 {memory}", "", "")},
@@ -43,11 +44,37 @@ M: dict[str, dict[str, tuple[str, str, str]]] = {
         "en": ("WSL can reach a GPU, but not through NVIDIA's driver", "WSL passes every Windows GPU through (/dev/dxg), and "
                "which one this is could not be read: running powershell.exe from WSL failed. Without nvidia-smi, PyTorch here "
                "runs on the CPU.", "If this PC has an NVIDIA GPU: update its driver in Windows (" + DRIVERS + "), then run "
-               "`wsl --shutdown` in Windows. Do not install a Linux NVIDIA driver inside WSL."),
+               "`wsl --shutdown` in Windows PowerShell. Do not install a Linux NVIDIA driver inside WSL."),
         "zh": ("WSL 能访问一块显卡，但不是通过 NVIDIA 驱动", "WSL 会把 Windows 的所有显卡都接进来（/dev/dxg），但读不出这块是什么显卡："
                "在 WSL 里运行 powershell.exe 失败了。没有 nvidia-smi，这里的 PyTorch 只能用 CPU。",
                "如果这台电脑有 NVIDIA 显卡：在 Windows 里更新驱动（" + DRIVERS + "），然后在 Windows 里运行 `wsl --shutdown`。"
                "不要在 WSL 里安装 Linux 版的 NVIDIA 驱动。")},
+    'wsl1': {"en": ('This is WSL 1, which has no GPU access', 'Only WSL 2 can use the GPU (through the Windows driver).', 'In Windows PowerShell: `wsl --set-version {distro} 2` (it converts the distribution; it takes a while).'),
+        "zh": ('这是 WSL 1，它完全用不了显卡', '只有 WSL 2 能用显卡（通过 Windows 的驱动）。', '在 Windows 的 PowerShell 里运行 `wsl --set-version {distro} 2`（会转换这个发行版，需要一段时间）。')},
+    'container-no-gpu': {"en": ("Inside a container, the host's {name} is not passed in", "A container uses the host's NVIDIA driver; it must not have one of its own, and gets the GPU only when started with it.", 'Start it with `--gpus all` (Docker, with the NVIDIA Container Toolkit on the host) or `--device nvidia.com/gpu=all` (Podman); see https://docs.nvidia.com/datacenter/cloud-native/container-toolkit/'),
+        "zh": ('在容器里，宿主机的 {name} 没有传进来', '容器使用宿主机的 NVIDIA 驱动，自己不能装驱动，只有启动时传入显卡才能用。', '启动时加上 `--gpus all`（Docker，宿主机要装 NVIDIA Container Toolkit）或 `--device nvidia.com/gpu=all`（Podman）；见 https://docs.nvidia.com/datacenter/cloud-native/container-toolkit/')},
+    'nvidia-smi-missing': {"en": ('The NVIDIA driver is there ({name}), but nvidia-smi was not found', "Without nvidia-smi the driver's version and the CUDA it supports cannot be read, so the build advised here is one most current drivers run (CUDA 12.6).", "On Linux, install your distribution's NVIDIA utilities (`nvidia-smi` or `nvidia-utils-<driver version>`); on Windows, reinstall or update the driver: https://www.nvidia.com/drivers"),
+        "zh": ('NVIDIA 驱动是有的（{name}），但找不到 nvidia-smi', '没有 nvidia-smi 就读不出驱动版本和它支持的 CUDA，所以这里建议的是大多数现行驱动都能跑的版本（CUDA 12.6）。', 'Linux 上安装发行版的 NVIDIA 工具包（`nvidia-smi` 或 `nvidia-utils-<驱动版本>`）；Windows 上重装或更新驱动：https://www.nvidia.com/drivers')},
+    'gpu-mac-metal': {"en": ('A GPU that PyTorch uses through Metal (MPS)', "An Intel Mac's AMD GPU; MPS works there from macOS 12.3.", ''),
+        "zh": ('一块 PyTorch 能通过 Metal（MPS）使用的显卡', 'Intel Mac 上的 AMD 显卡；macOS 12.3 起可以用 MPS。', '')},
+    'torch-mps-metal': {"en": ('PyTorch {version} uses the GPU through Metal (MPS)', '{path}', ''),
+        "zh": ('PyTorch {version} 能通过 Metal（MPS）使用显卡', '{path}', '')},
+    'cuda-visible-devices-range': {"en": ('CUDA_VISIBLE_DEVICES={value} names a GPU that is not there', 'GPUs are numbered from 0, and this machine has {count}; a number past the last hides them all.', 'Set it to 0, or unset it (`unset CUDA_VISIBLE_DEVICES`; in PowerShell `Remove-Item Env:CUDA_VISIBLE_DEVICES`).'),
+        "zh": ('CUDA_VISIBLE_DEVICES={value} 指定了不存在的显卡', '显卡从 0 开始编号，这台电脑有 {count} 块；超出范围的编号会把显卡全部藏起来。', '设为 0，或者取消这个变量（`unset CUDA_VISIBLE_DEVICES`，PowerShell 里是 `Remove-Item Env:CUDA_VISIBLE_DEVICES`）。')},
+    'torch-cuda-on-amd': {"en": ("PyTorch {version} is built for NVIDIA's CUDA {wheel}: it cannot use the {gpu}", 'AMD GPUs need a ROCm build.', '{amd_fix}'),
+        "zh": ('PyTorch {version} 是 NVIDIA 的 CUDA {wheel} 版：用不了 {gpu}', 'AMD 显卡需要 ROCm 版。', '{amd_fix}')},
+    'torch-cpu-amd-wsl': {"en": ('PyTorch {version} in {path} is the CPU build: it does not use the {gpu}', 'In WSL, ROCm runs on the Windows Adrenalin driver, for recent Radeon GPUs; do not install the Linux amdgpu driver inside WSL.', "AMD's WSL instructions and supported GPUs: https://rocm.docs.amd.com/projects/radeon-ryzen/en/latest/docs/install/installrad/wsl/howto_wsl.html"),
+        "zh": ('{path} 里的 PyTorch {version} 是 CPU 版：用不了 {gpu}', '在 WSL 里，ROCm 依靠 Windows 的 Adrenalin 驱动，支持较新的 Radeon 显卡；不要在 WSL 里安装 Linux 的 amdgpu 驱动。', 'AMD 的 WSL 安装说明和支持的显卡：https://rocm.docs.amd.com/projects/radeon-ryzen/en/latest/docs/install/installrad/wsl/howto_wsl.html')},
+    "externally-managed": {
+        "en": ("{path} is marked as managed by another tool (PEP 668)",
+               "pip refuses to install into it (\"externally-managed-environment\"): it belongs to the system's package manager "
+               "(Debian, Ubuntu, Homebrew) or to uv (`uv python install`). So the fix makes a virtual environment for AI work in "
+               "{venv} and installs PyTorch there; run your code with {venv_python}, or make a venv per project. On Debian and "
+               "Ubuntu, `sudo apt install python3-venv` first if venv is missing.", ""),
+        "zh": ("{path} 被标记为由别的工具管理（PEP 668）",
+               "pip 不允许往里面装包（“externally-managed-environment”）：它归系统的包管理器（Debian、Ubuntu、Homebrew）或者 uv（`uv python install`）管。"
+               "所以修复命令会在 {venv} 新建一个专门做 AI 的虚拟环境，把 PyTorch 装在那里；之后用 {venv_python} 运行你的代码，或者每个项目各建一个虚拟环境。"
+               "Debian 和 Ubuntu 上如果没有 venv，先 `sudo apt install python3-venv`。", "")},
     "gpu-none": {
         "en": ("No GPU for AI work: everything runs on the CPU ({ram} of memory)", "Small models run well enough on a CPU "
                "(see the models below); training and large models will be slow.", ""),
@@ -147,10 +174,10 @@ M: dict[str, dict[str, tuple[str, str, str]]] = {
                f"更新驱动（{DRIVERS}），或者装适合这个驱动的版本：{{fix_cmd}}")},
     "cuda-unavailable": {
         "en": ("PyTorch {version} is built for CUDA {wheel}, but CUDA does not start", "PyTorch said: {reason}",
-               "Restart the computer if the driver was updated; check CUDA_VISIBLE_DEVICES; in WSL, run `wsl --shutdown`. "
+               "Restart the computer if the driver was updated; check CUDA_VISIBLE_DEVICES; in WSL, run `wsl --shutdown` in Windows. "
                "If it persists, reinstall: {fix_cmd}"),
         "zh": ("PyTorch {version} 是 CUDA {wheel} 版，但 CUDA 启动不了", "PyTorch 的提示：{reason}",
-               "如果刚更新过驱动，重启电脑；检查 CUDA_VISIBLE_DEVICES；WSL 里运行 `wsl --shutdown`。还不行就重装：{fix_cmd}")},
+               "如果刚更新过驱动，重启电脑；检查 CUDA_VISIBLE_DEVICES；用 WSL 的话，在 Windows 里运行 `wsl --shutdown`。还不行就重装：{fix_cmd}")},
     "torch-cuda": {
         "en": ("PyTorch {version} uses the GPU ({gpu}, CUDA {wheel})", "{path}", ""),
         "zh": ("PyTorch {version} 能使用显卡（{gpu}，CUDA {wheel}）", "{path}", "")},

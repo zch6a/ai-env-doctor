@@ -24,7 +24,7 @@ PACKAGES = ["pip", "torch", "torchvision", "torchaudio", "transformers", "accele
 CONDA_TORCH = ["pytorch", "torchvision", "torchaudio", "cpuonly", "pytorch-cuda", "pytorch-gpu", "pytorch-cpu", "libtorch"]
 
 PROBE = r'''
-import json, platform, sys, warnings
+import json, os, platform, sys, warnings
 out = {"python": sys.version.split()[0], "executable": sys.executable, "bits": 64 if sys.maxsize > 2**32 else 32,
        "machine": platform.machine(), "packages": {}, "torch": None}
 try:
@@ -49,10 +49,20 @@ try:  # a conda environment: which torch packages conda itself installed (pip ca
                         channel = str(json.load(fh).get("channel") or "")
                 except Exception:
                     channel = ""
-                mine[parts[0]] = {"version": parts[1], "build": parts[2], "channel": channel.rstrip("/").split("/")[-1]}
+                # ".../pkgs/main/win-64" -> "main", "https://conda.anaconda.org/pytorch/noarch" -> "pytorch"
+                segs = [s for s in channel.rstrip("/").split("/") if s]
+                if segs and (segs[-1] == "noarch" or "-" in segs[-1] and segs[-1].split("-")[0] in ("win", "linux", "osx")):
+                    segs = segs[:-1]
+                mine[parts[0]] = {"version": parts[1], "build": parts[2], "channel": segs[-1] if segs else ""}
         out["conda"] = {"prefix": sys.prefix, "packages": mine}
 except Exception as e:
     out["conda_error"] = repr(e)
+try:  # PEP 668: a Python the system's package manager owns (Debian, Ubuntu, Homebrew); pip refuses to install into it
+    import sysconfig
+    out["externally_managed"] = sys.prefix == getattr(sys, "base_prefix", sys.prefix) and os.path.isfile(
+        os.path.join(sysconfig.get_path("stdlib"), "EXTERNALLY-MANAGED"))
+except Exception:
+    pass
 if True:  # torch is tried even without metadata: a source build or a copied folder may have none
     t = {}
     try:
@@ -166,6 +176,23 @@ def windows_store_stub(path: str, returncode: int | None = None, output: str = "
     return sys.platform == "win32" and "windowsapps" in path.lower() and (returncode == 9009 or "AI_ENV_DOCTOR_JSON" not in output)
 
 
+def probe_env(environ) -> dict:
+    """The user's environment for their interpreter, minus what the doctor's own launch put there.
+
+    On Windows uv's launcher for a venv's python.exe (so `uvx`, and `uv run`) sets PYTHONHOME to its
+    base Python (and says so in UV_INTERNAL__PYTHONHOME); CPython's own venv launcher sets
+    __PYVENV_LAUNCHER__. Passed on, either makes every other Python believe it lives there: another
+    sys.prefix, another standard library, no conda-meta, uv's EXTERNALLY-MANAGED marker. A PYTHONHOME
+    the user set is theirs and stays."""
+    ours = {os.path.normcase(p) for p in (environ.get("UV_INTERNAL__PYTHONHOME"), sys.base_prefix) if p}
+    env = {k: v for k, v in environ.items() if k.upper() not in ("__PYVENV_LAUNCHER__", "UV_INTERNAL__PYTHONHOME")}
+    for k in [k for k in env if k.upper() == "PYTHONHOME"]:
+        if os.path.normcase(env[k].rstrip("\\/")) in {p.rstrip("\\/") for p in ours}:
+            del env[k]
+    env["PYTHONIOENCODING"] = "utf-8"
+    return env
+
+
 def probe(path: str, why: str = "", origin: str = "", timeout: float = 90) -> Interpreter:
     it = Interpreter(path, why, origin)
     script = f"PACKAGES = {PACKAGES!r}\nCONDA_TORCH = {CONDA_TORCH!r}\n{PROBE}"
@@ -173,7 +200,7 @@ def probe(path: str, why: str = "", origin: str = "", timeout: float = 90) -> In
         # From a neutral folder: with -c, the current folder comes first on sys.path, and a project's own
         # json.py (or torch/ folder) would be imported instead of the real one.
         r = subprocess.run([path, "-c", script], capture_output=True, text=True, timeout=timeout, errors="replace",
-                           cwd=tempfile.gettempdir(), env={**os.environ, "PYTHONIOENCODING": "utf-8"},
+                           cwd=tempfile.gettempdir(), env=probe_env(os.environ),
                            creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
     except subprocess.TimeoutExpired:
         it.error = f"timed out after {timeout:g} s (importing torch can hang when a driver is stuck)"

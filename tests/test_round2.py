@@ -25,9 +25,9 @@ def test_conda_installed_pytorch_is_removed_with_conda_then_installed_with_pip()
     env = conda_env(["pytorch", "torchvision", "cpuonly", "pytorch-mutex"])
     f = diagnose(rtx3060(), [env], {"torch_index": INDEX})
     cpu = next(x for x in f if x.id == "torch-cpu")
-    assert cpu.fix.splitlines() == [
-        rf"conda remove -p {PREFIX} pytorch torchvision cpuonly",  # pip cannot uninstall these; cpuonly pins the CPU build
-        rf"{PREFIX}\python.exe -m pip install torch torchvision --index-url https://download.pytorch.org/whl/cu126"]
+    # pip cannot uninstall these; cpuonly pins the CPU build. One line: conda asks, and must not read the next line as its answer.
+    assert cpu.fix == (rf"conda remove -p {PREFIX} pytorch torchvision cpuonly; if ($?) {{ "
+                       rf"{PREFIX}\python.exe -m pip install torch torchvision --index-url https://download.pytorch.org/whl/cu126 }}")
     note = next(x for x in f if x.id == "torch-from-conda-cpuonly")
     assert note.level == "info" and "pytorch" in note.title and "cpuonly" in note.detail
 
@@ -35,8 +35,8 @@ def test_conda_installed_pytorch_is_removed_with_conda_then_installed_with_pip()
 def test_torch_from_pip_in_a_conda_env_is_uninstalled_with_pip():
     env = conda_env(["cpuonly"])  # cpuonly left over, torch itself from pip
     fix = next(x for x in diagnose(rtx3060(), [env], {"torch_index": INDEX}) if x.id == "torch-cpu").fix
-    assert fix.splitlines()[0] == rf"conda remove -p {PREFIX} cpuonly"
-    assert fix.splitlines()[1] == rf"{PREFIX}\python.exe -m pip uninstall -y torch torchvision", "else pip says 'already satisfied'"
+    assert fix.startswith(rf"conda remove -p {PREFIX} cpuonly; if ($?) {{ {PREFIX}\python.exe -m pip uninstall -y torch torchvision; "), \
+        "else pip says 'already satisfied'"
     plain = conda_env([])  # a conda env, nothing torch from conda: the ordinary pip fix, no note
     f = diagnose(rtx3060(), [plain], {"torch_index": INDEX})
     assert "conda remove" not in next(x for x in f if x.id == "torch-cpu").fix and "torch-from-conda" not in ids(f)
@@ -46,7 +46,7 @@ def test_a_conda_prefix_with_spaces_is_quoted():
     env = conda_env(["pytorch"])
     env.info["conda"]["prefix"] = r"C:\Program Files\conda\envs\ml"
     fix = next(x for x in diagnose(rtx3060(), [env], {"torch_index": INDEX}) if x.id == "torch-cpu").fix
-    assert fix.startswith('conda remove -p "C:\\Program Files\\conda\\envs\\ml" pytorch')
+    assert fix.startswith("conda remove -p 'C:\\Program Files\\conda\\envs\\ml' pytorch")
 
 
 def test_the_probe_reads_what_conda_installed(tmp_path, monkeypatch):
@@ -61,7 +61,7 @@ def test_the_probe_reads_what_conda_installed(tmp_path, monkeypatch):
     with contextlib.redirect_stdout(out):
         exec(f"PACKAGES = []\nCONDA_TORCH = {pyprobe.CONDA_TORCH!r}\n{pyprobe.PROBE}", {})
     info = json.loads(out.getvalue().split("AI_ENV_DOCTOR_JSON", 1)[1])
-    assert info["conda"]["packages"] == {"pytorch": {"version": "2.5.1", "build": "py3.12_cpu_0", "channel": "win-64"},
+    assert info["conda"]["packages"] == {"pytorch": {"version": "2.5.1", "build": "py3.12_cpu_0", "channel": "pytorch"},
                                          "cpuonly": {"version": "2.0", "build": "0", "channel": ""}}
 
 

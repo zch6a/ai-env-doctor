@@ -23,9 +23,9 @@ def test_the_fix_runs_where_there_is_no_pip_and_where_the_path_has_spaces():
                                 "uv pip install --python C:/p/.venv/Scripts/python.exe torch --index-url https://download.pytorch.org/whl/cu126"]
     spaced = py(CPU_BUILD, packages={"pip": "25", "torch": "x", "torchvision": "y"}, path=r"C:\Program Files\Python312\python.exe")
     cmd = install_cmd(spaced, "cu126", "windows")
-    assert cmd.startswith('& "C:\\Program Files\\Python312\\python.exe" -m pip uninstall -y torch torchvision'), "PowerShell needs &"
+    assert cmd.startswith("& 'C:\\Program Files\\Python312\\python.exe' -m pip uninstall -y torch torchvision"), "PowerShell needs &"
     assert "--force-reinstall" not in cmd, "it would also reinstall numpy and every other dependency at its newest"
-    assert install_cmd(spaced, "cu126", "linux").startswith('"C:\\Program Files')
+    assert install_cmd(spaced, "cu126", "linux").startswith("'C:\\Program Files")
 
 
 def test_data_centre_blackwell_and_a_mixed_machine_get_a_build_for_the_newest_gpu():

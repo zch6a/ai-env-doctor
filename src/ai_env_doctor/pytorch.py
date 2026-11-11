@@ -82,8 +82,11 @@ class Advice:
 def advise(driver_cuda: str | None, capability: str | None, available: dict[tuple[int, ...], set[str]] | None = None,
            strict: bool = False) -> Advice:
     """`strict`: only a build for a CUDA no newer than the driver's (after one newer failed to start)."""
-    drv = version(driver_cuda)[:2] or (12, 0)
     floor = (12, 8) if version(capability)[:1] >= (10,) else (0, 0)  # Blackwell: 10.x, 11.x, 12.x
+    known = bool(version(driver_cuda)[:2])
+    # Unknown (nvidia-smi missing, or it said N/A): a build most current drivers run, never "update the
+    # driver", which nothing here would support.
+    drv = version(driver_cuda)[:2] if known else max((12, 6), floor)
 
     def pick(tags) -> str | None:
         """The build for a CUDA no newer than the driver's, the newest such; else the lowest of the
@@ -103,12 +106,12 @@ def advise(driver_cuda: str | None, capability: str | None, available: dict[tupl
             tag = pick(available[ver])
             if tag:
                 low = tag_version(min(available[newest], key=tag_version))
-                needs = None if ver == newest else f"CUDA {low[0]}.{low[1]}"
+                needs = None if ver == newest or not known else f"CUDA {low[0]}.{low[1]}"
                 return Advice(tag, ".".join(map(str, ver)), ".".join(map(str, newest)), needs)
     tag = pick(MAINTAINED if not strict else ["cu118", "cu121", "cu124", *MAINTAINED])  # strict: an older PyTorch, if need be
     if tag:
         return Advice(tag, None, None, None)
     # The driver is older than any build that runs on this GPU: the driver comes first.
     if floor > (0, 0):
-        return Advice("cu128", None, None, None, True)
-    return Advice("cu118" if drv[:1] == (11,) else "cu126", None, None, None, drv < (11, 8))
+        return Advice("cu128", None, None, None, known)
+    return Advice("cu118" if drv[:1] == (11,) else "cu126", None, None, None, known and drv < (11, 8))

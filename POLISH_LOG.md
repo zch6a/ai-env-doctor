@@ -107,3 +107,28 @@ On this laptop (6 GB): chat qwen3.5:4b, split qwen3.5:9b; code qwen2.5-coder:3b;
 **Open**
 - A reviewer who has not seen the code, again (the last review was round 1).
 - `--json` is not documented field by field; it is meant for bug reports, but scripts will use it.
+
+## Round 4 — 2026-11-12
+
+**Second independent review.** A reviewer who had not seen the code read all of it and reproduced each finding with synthetic machines (scripts outside the repository, nothing installed, no network). 15 findings; all fixed, each with a regression test in `tests/test_review2.py` that fails on the code before this round (checked by running the new tests with `src/` stashed).
+
+- **Fix commands broke on ordinary paths.** Only paths with spaces were quoted, and with double quotes. `C:\Users\O'Brien\...` and `D:\R&D\...` did not parse in PowerShell; `proj(1)` ran `C:\Users\x\proj`; `"...\$work\..."` dropped `$work`; in bash, `/srv/r&d/...` put `/srv/r` in the background and ran a relative `d/.venv/bin/python`. Now PowerShell gets single quotes (only `'` is special, doubled) after `&`, POSIX shells get `shlex.quote`, for the interpreter, `--python` and the conda prefix. The tests run the generated commands through PowerShell's own parser (on Windows) and `bash` (in CI on Linux and macOS) and check that the path comes out as one word.
+- **A working driver was called missing.** Without `nvidia-smi` on PATH (a separate package on Debian; `Program Files\NVIDIA Corporation\NVSMI` with old Windows drivers), an NVIDIA GPU in `lspci` or a properly named one in Windows gave "install the driver", and a CUDA PyTorch that worked got no finding at all. Now the NVSMI folder is searched; the driver counts as present when the Linux kernel module is loaded (`/proc/driver/nvidia/version`), when Windows names the GPU (not "Microsoft Basic Display Adapter"), or when any environment runs CUDA; that is a warning that only nvidia-smi is missing, and a working CUDA PyTorch is reported as working. A CPU build there is still the error it is.
+- **A proxy password leaked into `--json`.** `HTTPS_PROXY=ann:s3cret@proxy:8080` (no scheme, which pip accepts) and passwords containing `/` were not redacted. Proxy variables are now redacted up to the last `@`, with or without a scheme; index URLs only up to the host, since their paths may contain `@`.
+- "Environments disagree" counted a PyTorch whose GPU test kernel failed as the one that works, and pointed the user at it.
+- **Containers** (Docker, Podman: `/.dockerenv`, `/run/.containerenv`, cgroups) see the host's GPU in sysfs and were told to install a driver; now they are told to start the container with `--gpus all` and never to install one inside. **WSL 1** (no GPU at all) is told to convert to WSL 2, with the distribution's name; the `wsl` commands now say to run them in Windows PowerShell, where `wsl` exists.
+- **AMD**: Ryzen laptops' integrated graphics ("AMD Radeon(TM) Graphics", 780M, Cezanne ...) were treated as ROCm targets; WSL with a Radeon got native-Linux advice (install amdgpu; in WSL it must not be); a CUDA PyTorch on an AMD-only machine got no hint about ROCm. An Intel Mac's AMD GPU, which PyTorch uses through Metal, was reported as "no GPU".
+- **conda**: the channel showed as "win-64" (the platform segment of the URL; the test had locked that in); torchvision installed by conda alone did not switch to the conda fix; and `conda remove` (which asks before removing) was a separate line, so a pasted next line could be taken as its answer and the install skipped. Now the removal and what follows are one line (`&&`; `; if ($?) { ... }` in Windows PowerShell 5.1).
+- **PEP 668**: a system Python (Debian, Ubuntu, Homebrew) got a `pip install` that fails with "externally-managed-environment". Now the probe reads the marker and the fix makes a virtual environment instead.
+- An unknown driver CUDA version (nvidia-smi failed or said N/A) was taken as 12.0: "the driver (CUDA None) is too old" on an RTX 5090. Unknown now means a build most drivers run, and no driver verdict.
+- `CUDA_VISIBLE_DEVICES=1` on a one-GPU machine hides it; now said.
+
+**Found by running it for real, not by the review.** Running the doctor against the Miniconda Python on this laptop (only the probe script, which reads) reported it as externally managed, with no conda information and someone else's pip version. The cause: uv's launcher for a venv's `python.exe` sets `PYTHONHOME` to uv's base Python, and the doctor passed its environment on to every Python it probed, so each of them took uv's Python as its home. On Windows that is every run under `uvx` or `uv run`. Round 1's end-to-end check did not show it because that environment was made from the same uv Python. The probe now drops a `PYTHONHOME` that the doctor's own launch set (and `__PYVENV_LAUNCHER__`), and keeps one the user set; a test starts a real child Python with a broken `PYTHONHOME` that would not even start before. Then, since a Python installed by `uv python install` really is marked externally managed, the venv fix was made to work in PowerShell too (`$HOME\.venvs\ai\Scripts\python.exe`, run with `&`).
+
+**`--json` documented**: `docs/json.md`, field by field, with `schema: 1` now in the output and `models.as_of`. The READMEs link it, and now say that paths are not redacted and contain the user name.
+
+**Tests**: 71 (+16), 4 skipped on Windows (bash and symlinks; CI runs them).
+
+**Open**
+- The conda fix end to end on a real conda environment with a CPU PyTorch (Miniconda is here, but installing PyTorch into it is a change to the user's machine I will not make for a test).
+- The review's findings on Linux, macOS and WSL are tested with synthetic machines only.

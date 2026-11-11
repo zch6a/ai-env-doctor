@@ -91,8 +91,8 @@ has no pip; elsewhere it is `python -m pip`.
 - **It sends nothing about you.** The network check is one HEAD request to each of the five hosts
   above, through your proxy as pip would make it, and one GET of PyTorch's public index; nothing about
   the machine goes with them. `--offline` skips all of it.
-- **Passwords in proxy URLs are hidden** in the report and in `--json`, so either can be pasted into
-  a bug report.
+- **Passwords in proxy URLs are hidden** in the report and in `--json` (and user names and tokens in
+  them). Paths are not, and they contain your user name: look before you paste.
 - No dependencies: it is plain Python 3.10+, so `uvx` starts it in a second or two.
 
 ## Install and use
@@ -112,7 +112,8 @@ ai-env-doctor --json             # everything found, for scripts and bug reports
 ```
 
 Run it in your project's folder: it checks the `.venv` there first. The exit code is 1 when something
-needs fixing, 0 when not.
+needs fixing, 0 when not, 2 when the doctor itself failed. What `--json` contains, field by field:
+[docs/json.md](docs/json.md).
 
 ## Status
 

@@ -33,6 +33,9 @@ class System:
     machine: str  # the hardware: x86_64, arm64 ...
     wsl: bool = False
     wsl_gpu: bool = False  # WSL can reach a GPU through /dev/dxg
+    wsl1: bool = False  # WSL 1: no GPU access at all
+    container: bool = False  # inside Docker, Podman ...
+    nvidia_kernel_driver: str | None = None  # Linux: the NVIDIA module is loaded (its version)
     rosetta: bool = False  # an x86_64 process on Apple Silicon
     ram_mb: int | None = None
     ram_free_mb: int | None = None
@@ -100,8 +103,12 @@ def nvidia() -> tuple[list[GPU], str | None, str | None]:
     if not smi and wsl() and Path("/usr/lib/wsl/lib/nvidia-smi").is_file():
         smi = "/usr/lib/wsl/lib/nvidia-smi"  # in WSL it comes from the Windows driver
     if not smi and sys.platform == "win32":
-        guess = Path(os.environ.get("SYSTEMROOT", r"C:\Windows")) / "System32" / "nvidia-smi.exe"
-        smi = str(guess) if guess.is_file() else None
+        # Current drivers put it in System32; drivers before about 2019 in Program Files\NVIDIA Corporation\NVSMI.
+        for guess in (Path(os.environ.get("SYSTEMROOT", r"C:\Windows")) / "System32" / "nvidia-smi.exe",
+                      Path(os.environ.get("PROGRAMFILES", r"C:\Program Files")) / "NVIDIA Corporation" / "NVSMI" / "nvidia-smi.exe"):
+            if guess.is_file():
+                smi = str(guess)
+                break
     if not smi:
         return [], None, None
     query = run([smi, "--query-gpu=name,memory.total,memory.used,driver_version,compute_cap", "--format=csv,noheader,nounits"])
@@ -250,6 +257,35 @@ def wsl() -> bool:
         return False
 
 
+def wsl1(proc_version: str | None = None) -> bool:
+    """WSL 1 has no GPU at all; WSL 2's kernel says "microsoft-standard" (or "WSL2")."""
+    try:
+        text = (proc_version if proc_version is not None else Path("/proc/version").read_text()).lower()
+    except OSError:
+        return False
+    return "microsoft" in text and "microsoft-standard" not in text and "wsl2" not in text
+
+
+def nvidia_kernel_driver(path: Path = Path("/proc/driver/nvidia/version")) -> str | None:
+    """Linux: the NVIDIA kernel module's version, when it is loaded, with or without nvidia-smi."""
+    try:
+        m = re.search(r"Kernel Module(?: for [\w_]+)?\s+([\d.]+)", path.read_text())
+    except OSError:
+        return None
+    return m.group(1) if m else "?"
+
+
+def in_container(root: Path = Path("/")) -> bool:
+    """Docker, Podman and the like: their sysfs shows the host's GPUs, which only the runtime can pass in."""
+    if (root / ".dockerenv").exists() or (root / "run" / ".containerenv").exists():
+        return True
+    try:
+        cgroup = (root / "proc" / "1" / "cgroup").read_text()
+    except OSError:
+        return False
+    return bool(re.search(r"docker|containerd|kubepods|libpod|lxc", cgroup))
+
+
 # ---------------------------------------------------------------- disk
 
 def cache_dirs() -> dict[str, Path]:
@@ -286,6 +322,10 @@ def system() -> System:
     s.gpu_seen_by_os = os_display_adapters(s.wsl) if not gpus else []
     # /dev/dxg is WSL's door to whatever GPU Windows has (Intel and AMD too): it says there is a GPU, not whose.
     s.wsl_gpu = bool(s.wsl and Path("/dev/dxg").exists())
+    s.wsl1 = s.wsl and wsl1()
+    if os_name == "linux" and not s.wsl:
+        s.nvidia_kernel_driver = nvidia_kernel_driver()
+        s.container = in_container()
     s.disk_free_mb = {name: free_space(path) for name, path in cache_dirs().items()}
     s.env = env_snapshot(os.environ, sys.platform)
     return s
@@ -295,12 +335,19 @@ def env_snapshot(environ, platform_name: str) -> dict:
     """The variables that matter, secrets hidden. On Windows names ignore case, so HTTP_PROXY and
     http_proxy are the same variable: read once."""
     keys = [k for k in ENV_KEYS if not (platform_name == "win32" and k != k.upper())]
-    return {k: redact(environ[k]) for k in keys if k in environ}
+    return {k: redact(environ[k], proxy=k.upper().endswith("PROXY")) for k in keys if k in environ}
 
 
-def redact(value: str) -> str:
+def redact(value: str, proxy: bool = False) -> str:
     """A URL with whatever could be secret hidden, so that the report can be pasted into an issue: the
     whole user part ("http://ann:secret@proxy" -> "http://***@proxy"; a token is often the user name),
-    and the values in the query ("?token=abc" -> "?token=***")."""
-    value = re.sub(r"(://)[^/?#\s]*@", r"\1***@", value)  # up to the last @ before the host
+    and the values in the query ("?token=abc" -> "?token=***").
+
+    A proxy has no path, so there everything up to its last @ is the user part, with or without a
+    scheme ("ann:secret@proxy:8080", which pip accepts) and whatever the password contains ("/" too).
+    Elsewhere (index URLs) only up to the host, since a path may contain @."""
+    if proxy:
+        value = ",".join(re.sub(r"^(\s*(?:\w[\w+.-]*://)?)\S*@", r"\1***@", part) for part in value.split(","))
+    else:
+        value = re.sub(r"(://)[^/?#\s]*@", r"\1***@", value)
     return re.sub(r"([?&][^=&#\s]+=)[^&#\s]*", r"\1***", value)

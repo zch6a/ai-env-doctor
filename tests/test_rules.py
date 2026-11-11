@@ -74,7 +74,7 @@ def test_two_environments_that_disagree():
 
 
 def test_driver_problems():
-    assert "driver-missing" in ids(diagnose(rtx3060(gpus=[], nvidia_smi=None, driver_cuda=None, gpu_seen_by_os=["NVIDIA GeForce RTX 4070"]), []))
+    assert "driver-missing" in ids(diagnose(rtx3060(gpus=[], nvidia_smi=None, driver_cuda=None, gpu_seen_by_os=["NVIDIA GPU (Microsoft Basic Display Adapter)"]), []))
     assert "wsl-no-driver" in ids(diagnose(rtx3060(gpus=[], nvidia_smi=None, driver_cuda=None, wsl=True, os="linux",
                                                     gpu_seen_by_os=["NVIDIA Corporation GA106"]), []))
     assert "nvidia-smi-failed" in ids(diagnose(rtx3060(gpus=[]), []))
