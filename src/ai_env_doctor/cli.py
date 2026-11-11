@@ -28,7 +28,8 @@ TEXT = {
            "contacting": "Contacting {hosts} (one HEAD request each; --offline to skip)",
            "device": {"gpu": "on the GPU ({mem:.1f} GB)", "apple": "on the Apple GPU ({mem:.1f} GB)", "cpu": "on the CPU ({mem:.1f} GB of memory; slow)"},
            "uses": {"chat": "chat", "code": "code", "reasoning": "reasoning", "vision": "images", "embedding": "embeddings (search)"},
-           "sizes": "Sizes are Ollama's default builds (4-bit; embeddings 16-bit), approximate; `ollama run <name>` to try one.",
+           "sizes": "Sizes are the downloads of Ollama's default builds, approximate; `ollama run <name>` to try one (the newest "
+                    "models need a recent Ollama).",
            "stale": "This list is from {date}; newer models of the same sizes have probably come out since: see https://ollama.com/library, "
                     "or update ai-env-doctor."},
     "zh": {"title": "ai-env-doctor {v}", "machine": "本机", "findings": "检查结果", "models": "这台电脑能跑的模型（Ollama）",
@@ -37,7 +38,7 @@ TEXT = {
            "contacting": "正在连接 {hosts}（每个只发一个 HEAD 请求；加 --offline 可跳过）",
            "device": {"gpu": "在显卡上（{mem:.1f} GB）", "apple": "在 Apple 显卡上（{mem:.1f} GB）", "cpu": "在 CPU 上（内存 {mem:.1f} GB，较慢）"},
            "uses": {"chat": "对话", "code": "写代码", "reasoning": "推理", "vision": "看图", "embedding": "向量（搜索）"},
-           "sizes": "大小是 Ollama 的默认版本（4 位量化；向量模型为 16 位），为近似值；用 `ollama run <名称>` 试用。",
+           "sizes": "大小是 Ollama 默认版本的下载大小，为近似值；用 `ollama run <名称>` 试用（最新的模型需要较新的 Ollama）。",
            "stale": "这份清单是 {date} 的，之后很可能出了同样大小的更新模型：见 https://ollama.com/library ，或者更新 ai-env-doctor。"},
 }
 

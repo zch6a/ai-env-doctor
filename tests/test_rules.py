@@ -134,7 +134,7 @@ def test_the_index_is_read_for_this_python_and_platform():
 def test_models_that_fit():
     assert models.plan(rtx3060()).full["chat"].size_gb <= 4.1
     big = models.plan(rtx3060(gpus=[GPU("nvidia", "RTX 4090", 24564, 0, "8.9", "570")]))
-    assert big.full["chat"].size_gb >= 17 and big.full["code"].tag == "qwen2.5-coder:32b"
+    assert big.full["chat"].size_gb >= 17 and big.full["code"].tag == "qwen3-coder:30b"
     cpu = models.plan(rtx3060(gpus=[], ram_mb=8 * 1024))
     assert cpu.device == "cpu" and cpu.full["chat"].size_gb < 3 and not cpu.partial
     split = models.plan(rtx3060())

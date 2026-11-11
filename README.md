@@ -38,8 +38,8 @@ Findings:
   ✓ The network reaches pypi.org, download.pytorch.org, huggingface.co, hf-mirror.com, registry.ollama.ai
 
 Models this machine can run (Ollama) — on the GPU (5.5 GB):
-  chat                 fits: gemma3:4b (3.3 GB);  split GPU/CPU, slower: mistral:7b (4.1 GB)
-  code                 fits: qwen2.5-coder:1.5b (1 GB);  split GPU/CPU, slower: qwen2.5-coder:7b (4.7 GB)
+  chat                 fits: qwen3.5:4b (3.3 GB);  split GPU/CPU, slower: qwen3.5:9b (6.6 GB)
+  code                 fits: qwen2.5-coder:3b (1.9 GB);  split GPU/CPU, slower: qwen2.5-coder:7b (4.7 GB)
   ...
 ```
 
@@ -62,6 +62,8 @@ has no pip; elsewhere it is `python -m pip`.
   - a build for a newer CUDA than the driver supports (CUDA 13 builds on a CUDA 12 driver);
   - a build without code for the GPU (RTX 50-series need CUDA 12.8 or later);
   - CUDA that will not start, with what PyTorch said; an AMD build on an NVIDIA GPU;
+  - on an AMD GPU, whether PyTorch is a ROCm build that sees it, and where the right build comes from
+    (PyTorch's index on Linux, AMD's own on Windows);
   - Apple GPU (MPS) support, and Python running under Rosetta on Apple Silicon;
   - two environments that disagree (the GPU works in one, not in the one your editor uses);
   - in a conda environment, a PyTorch that conda installed (pip cannot remove it) and `cpuonly`, which

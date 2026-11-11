@@ -221,6 +221,9 @@ def diagnose(system, interpreters, net: dict | None = None, lang: str = "en") ->
                 d.add("warning", "rocm-unavailable", where, version=ver, reason=(t.get("cuda_error") or " ".join(t.get("warnings") or []))[:300] or "-")
         elif built and not nvidia_expected:
             d.add("info", "torch-cuda-no-gpu", where, version=ver, wheel=built)
+        elif not built and listed_amd and system.os in ("linux", "windows"):
+            d.add("info", "torch-cpu-amd-windows" if system.os == "windows" else "torch-cpu-amd", where, version=ver, path=it.path,
+                  gpu=listed_amd[0])
         elif not built:
             d.add("info", "torch-cpu-ok", where, version=ver, path=it.path)
     for it in usable:  # why a fix starts with `conda remove`, said once per environment

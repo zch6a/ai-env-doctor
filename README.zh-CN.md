@@ -44,6 +44,7 @@ uvx --from git+https://github.com/zch6a/ai-env-doctor ai-env-doctor
   - 装的版本比驱动支持的 CUDA 新（CUDA 13 的 PyTorch 配 CUDA 12 的驱动）；
   - 版本里没有为这块显卡编译的代码（RTX 50 系列需要 CUDA 12.8 或更高）；
   - CUDA 启动失败，并附上 PyTorch 的原话；NVIDIA 显卡装了 AMD 版；
+  - AMD 显卡上，PyTorch 是不是能看到显卡的 ROCm 版，以及该从哪里装（Linux 上是 PyTorch 的源，Windows 上是 AMD 自己的）；
   - Apple 显卡（MPS）支持，以及在 Apple 芯片上用 Rosetta 跑的 Python；
   - 两个环境不一致（一个能用显卡，编辑器用的那个却不能）；
   - conda 环境里由 conda 装的 PyTorch（pip 删不掉）和 `cpuonly`（它会让 CPU 版一装再装）：修复命令会先用 conda 删掉它们；

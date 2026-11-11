@@ -1,7 +1,7 @@
 """Which well-known local models this machine can run, with Ollama.
 
 The list is short on purpose (a few dozen widely used models, by use), with approximate download sizes
-of Ollama's default builds as of late 2026 (4-bit for the language models, 16-bit for embeddings); check `ollama show` for the exact numbers. For a full
+of Ollama's default builds as of November 2026 (mostly 4-bit); check `ollama show` for the exact numbers. For a full
 catalogue with speed estimates, see llmfit (https://github.com/AlexsJones/llmfit).
 
 A model "fits" when its weights plus room for a 4K-token context and the runtime (about 1 GB and 10%)
@@ -31,21 +31,26 @@ class Model:
     note: str = ""
 
 
+# Checked against ollama.com/library in November 2026: per use, the newest widely used family at each
+# size, so that "the largest that fits" is also a good choice (an older, larger model of the same
+# class is left out). Gemma 4's E2B/E4B are left out too: their downloads (4.6 and 6.6 GB) are those of
+# much larger models, so by size they would crowd out better ones.
 CATALOG = [
-    Model("qwen3:0.6b", 0.5, "chat", "Chinese and English"), Model("llama3.2:1b", 1.3, "chat"), Model("gemma3:1b", 0.8, "chat"),
-    Model("qwen3:1.7b", 1.4, "chat", "Chinese and English"), Model("llama3.2:3b", 2.0, "chat"), Model("qwen3:4b", 2.5, "chat", "Chinese and English"),
-    Model("phi4-mini", 2.5, "chat"), Model("gemma3:4b", 3.3, "chat", "also reads images"), Model("mistral:7b", 4.1, "chat"),
-    Model("llama3.1:8b", 4.9, "chat"), Model("qwen3:8b", 5.2, "chat", "Chinese and English"), Model("gemma3:12b", 8.1, "chat", "also reads images"),
-    Model("qwen3:14b", 9.3, "chat", "Chinese and English"), Model("phi4:14b", 9.1, "chat"), Model("mistral-small:24b", 14.0, "chat"),
-    Model("gpt-oss:20b", 14.0, "chat", "OpenAI's open model; reasoning"), Model("gemma3:27b", 17.0, "chat", "also reads images"),
-    Model("qwen3:30b", 19.0, "chat", "mixture of experts: fast for its size"), Model("qwen3:32b", 20.0, "chat", "Chinese and English"),
-    Model("llama3.1:70b", 43.0, "chat"), Model("gpt-oss:120b", 65.0, "chat"),
-    Model("qwen2.5-coder:1.5b", 1.0, "code"), Model("qwen2.5-coder:7b", 4.7, "code"), Model("qwen2.5-coder:14b", 9.0, "code"),
-    Model("qwen2.5-coder:32b", 20.0, "code"),
-    Model("deepseek-r1:1.5b", 1.1, "reasoning"), Model("deepseek-r1:7b", 4.7, "reasoning"), Model("deepseek-r1:8b", 5.2, "reasoning"),
-    Model("deepseek-r1:14b", 9.0, "reasoning"), Model("deepseek-r1:32b", 20.0, "reasoning"), Model("deepseek-r1:70b", 43.0, "reasoning"),
-    Model("qwen2.5vl:3b", 3.2, "vision"), Model("qwen2.5vl:7b", 6.0, "vision"), Model("llava:7b", 4.7, "vision"),
-    Model("nomic-embed-text", 0.3, "embedding"), Model("bge-m3", 1.2, "embedding", "100+ languages"),
+    Model("qwen3.5:0.8b", 1.2, "chat", "also reads images"), Model("qwen3.5:2b", 2.7, "chat", "also reads images"),
+    Model("qwen3.5:4b", 3.3, "chat", "also reads images"), Model("qwen3.5:9b", 6.6, "chat", "also reads images"),
+    Model("gemma4:12b", 7.7, "chat", "also reads images"), Model("gpt-oss:20b", 14.0, "chat", "OpenAI's open model"),
+    Model("gemma4:26b", 16.0, "chat", "mixture of experts: fast for its size"), Model("qwen3.5:27b", 17.0, "chat", "also reads images"),
+    Model("gemma4:31b", 19.0, "chat", "also reads images"), Model("qwen3.5:35b", 22.0, "chat", "mixture of experts: fast for its size"),
+    Model("gpt-oss:120b", 65.0, "chat", "mixture of experts"), Model("qwen3.5:122b", 81.0, "chat", "mixture of experts"),
+    Model("qwen2.5-coder:1.5b", 1.0, "code"), Model("qwen2.5-coder:3b", 1.9, "code"), Model("qwen2.5-coder:7b", 4.7, "code"), Model("qwen2.5-coder:14b", 9.0, "code"),
+    Model("qwen3-coder:30b", 19.0, "code", "mixture of experts: fast for its size"),
+    Model("qwen3:1.7b", 1.4, "reasoning", "thinks before it answers"), Model("qwen3:4b", 2.5, "reasoning", "thinks before it answers"),
+    Model("qwen3:8b", 5.2, "reasoning", "thinks before it answers"), Model("qwen3:14b", 9.3, "reasoning", "thinks before it answers"),
+    Model("qwen3:30b", 19.0, "reasoning", "mixture of experts: fast for its size"), Model("qwen3:32b", 20.0, "reasoning"),
+    Model("qwen3-vl:2b", 1.9, "vision"), Model("qwen3-vl:4b", 3.3, "vision"), Model("qwen3-vl:8b", 6.2, "vision"),
+    Model("qwen3-vl:30b", 20.0, "vision", "mixture of experts: fast for its size"), Model("qwen3-vl:32b", 21.0, "vision"),
+    Model("nomic-embed-text", 0.3, "embedding"), Model("embeddinggemma", 0.6, "embedding", "100+ languages"),
+    Model("bge-m3", 1.2, "embedding", "100+ languages"), Model("qwen3-embedding:4b", 2.5, "embedding", "100+ languages"),
 ]
 USES = ("chat", "code", "reasoning", "vision", "embedding")
 

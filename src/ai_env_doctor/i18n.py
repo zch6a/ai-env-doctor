@@ -34,10 +34,11 @@ M: dict[str, dict[str, tuple[str, str, str]]] = {
         "en": ("Apple GPU: {name}, about {memory} of memory it may use", "", ""),
         "zh": ("Apple 显卡：{name}，可用内存约 {memory}", "", "")},
     "gpu-amd": {
-        "en": ("AMD GPU: {name}", "PyTorch uses AMD GPUs through ROCm, on Linux and some Windows setups; this tool does not check "
-               "ROCm in detail yet.", "See https://rocm.docs.amd.com for what your GPU supports."),
-        "zh": ("AMD 显卡：{name}", "PyTorch 通过 ROCm 使用 AMD 显卡（Linux，以及部分 Windows 环境）；本工具暂时不细查 ROCm。",
-               "你的显卡支持什么，见 https://rocm.docs.amd.com")},
+        "en": ("AMD GPU: {name}", "PyTorch uses AMD GPUs through ROCm: on Linux, and on Windows for recent Radeon GPUs. This tool "
+               "checks whether each PyTorch is a ROCm build and sees the GPU, not the ROCm installation itself.",
+               "See https://rocm.docs.amd.com for what your GPU supports."),
+        "zh": ("AMD 显卡：{name}", "PyTorch 通过 ROCm 使用 AMD 显卡：Linux 上可以，Windows 上支持较新的 Radeon 显卡。本工具检查每个 PyTorch 是不是 ROCm 版、"
+               "能不能看到显卡，不检查 ROCm 本身的安装。", "你的显卡支持什么，见 https://rocm.docs.amd.com")},
     "wsl-gpu-unknown": {
         "en": ("WSL can reach a GPU, but not through NVIDIA's driver", "WSL passes every Windows GPU through (/dev/dxg), and "
                "which one this is could not be read: running powershell.exe from WSL failed. Without nvidia-smi, PyTorch here "
@@ -177,6 +178,22 @@ M: dict[str, dict[str, tuple[str, str, str]]] = {
     "torch-cuda-no-gpu": {
         "en": ("PyTorch {version} is a CUDA {wheel} build, but there is no NVIDIA GPU", "It runs on the CPU, with a larger download than needed.", ""),
         "zh": ("PyTorch {version} 是 CUDA {wheel} 版，但这台电脑没有 NVIDIA 显卡", "它会在 CPU 上运行，只是安装包比需要的大。", "")},
+    "torch-cpu-amd": {
+        "en": ("PyTorch {version} in {path} is the CPU build: it does not use the {gpu}",
+               "PyTorch has ROCm builds for AMD GPUs on Linux (Radeon RX 7000 and 9000, Instinct, some older cards); they need "
+               "the amdgpu driver.", "Choose ROCm on " + WHEEL_HELP + " for the install command; supported GPUs: https://rocm.docs.amd.com"),
+        "zh": ("{path} 里的 PyTorch {version} 是 CPU 版：用不了 {gpu}",
+               "PyTorch 在 Linux 上有给 AMD 显卡的 ROCm 版（Radeon RX 7000、9000 系列，Instinct，以及部分较老的显卡），需要 amdgpu 驱动。",
+               "在 " + WHEEL_HELP + " 选择 ROCm 得到安装命令；支持哪些显卡见 https://rocm.docs.amd.com")},
+    "torch-cpu-amd-windows": {
+        "en": ("PyTorch {version} in {path} is the CPU build: it does not use the {gpu}",
+               "On Windows, AMD publishes its own PyTorch builds for recent Radeon GPUs (RX 7000 and 9000 series, Ryzen AI Max); "
+               "PyTorch's own index has none for Windows. They need a recent Adrenalin driver and a Python version AMD builds for.",
+               "AMD's instructions and supported GPUs: https://rocm.docs.amd.com/projects/radeon-ryzen/en/latest/docs/install/installrad/windows/install-pytorch.html . Older Radeon cards: Linux, or DirectML."),
+        "zh": ("{path} 里的 PyTorch {version} 是 CPU 版：用不了 {gpu}",
+               "在 Windows 上，AMD 为较新的 Radeon 显卡（RX 7000、9000 系列，Ryzen AI Max）发布了自己的 PyTorch 版本；PyTorch 官方源里没有 Windows 的 ROCm 版。"
+               "需要较新的 Adrenalin 驱动，以及 AMD 提供了版本的 Python。",
+               "AMD 的安装说明和支持的显卡：https://rocm.docs.amd.com/projects/radeon-ryzen/en/latest/docs/install/installrad/windows/install-pytorch.html 。较老的 Radeon 显卡：用 Linux，或者 DirectML。")},
     "torch-cpu-ok": {
         "en": ("PyTorch {version} runs on the CPU", "{path}", ""),
         "zh": ("PyTorch {version} 在 CPU 上运行", "{path}", "")},

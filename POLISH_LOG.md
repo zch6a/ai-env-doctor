@@ -87,3 +87,23 @@ From the open list of round 1, then the whole tool read and run again.
 - WSL and conda by hand: neither is installed on this laptop, and I will not install them on the user's machine for a test.
 - The model list's contents: compare with what Ollama's library offers now, model by model.
 - ROCm on Windows (AMD's 2025 PyTorch builds for Radeon on Windows) is not recognized as such.
+
+## Round 3 — 2026-11-12
+
+**The model list, checked against Ollama's library** (ollama.com/library, read in the browser, November 2026). Every model in it still exists, but newer families had come out at most sizes in the past months: Gemma 4, Qwen 3.5 (which also reads images), Qwen3-VL, Qwen3-Coder, Qwen3-Embedding, EmbeddingGemma. Since the report recommends "the largest that fits", an older model of the same class that is slightly larger wins over a better new one (gemma3:4b at 3.4 GB over qwen3.5:4b at 3.3). So the list now keeps, per use, the newest widely used family at each size, with the sizes of the default (q4_K_M) downloads read from each model page:
+- chat: Qwen 3.5 from 0.8B to 122B, Gemma 4 12B / 26B / 31B, gpt-oss 20B / 120B. Gemma 4's E2B and E4B are left out: their downloads (4.6 and 6.6 GB) are those of much larger models, and by size they would push out better ones.
+- code: qwen2.5-coder 1.5B / 3B / 7B / 14B, then qwen3-coder 30B. The 3B was missing: on a 6 GB GPU the best code model that fit was the 1.5B.
+- reasoning: Qwen3 1.7B to 32B, which think before answering (better than the DeepSeek-R1 distills at each size).
+- images: Qwen3-VL 2B to 32B. Embeddings: nomic-embed-text, EmbeddingGemma, bge-m3, qwen3-embedding 4B.
+
+On this laptop (6 GB): chat qwen3.5:4b, split qwen3.5:9b; code qwen2.5-coder:3b; images qwen3-vl:4b. The note under the table said "embeddings 16-bit", no longer true; it now says the sizes are the default downloads and that the newest models need a recent Ollama.
+
+**AMD on Windows.** AMD now publishes its own PyTorch for recent Radeon GPUs on Windows (RX 7000/9000, Ryzen AI Max; repo.radeon.com); PyTorch's index has none. A ROCm build that works was already recognized on any OS (by `torch.version.hip`). What was missing: a CPU build on an AMD machine was reported as fine, with no hint that a GPU build exists. Now an info points to PyTorch's index (choose ROCm) on Linux and to AMD's Windows instructions on Windows. AMD's Radeon/Ryzen docs say they cover releases through ROCm 7.2.1 and newer docs are unified, so the link goes to the page that exists now, and the message does not name a Python version (it changes with AMD's releases). The AMD GPU finding no longer says "this tool does not check ROCm"; it says what it checks.
+
+**CI**: actions/checkout v4 → v7 and setup-uv v6 → v10, both on Node 24 (GitHub warned that Node 20 actions are deprecated). The inputs used (`python-version`, `activate-environment`) are unchanged in v10.
+
+**Tests**: 55 (+4): the list has a model for every use on an 8 GB laptop without a GPU, the picks on a 6 GB and a 24 GB GPU, the AMD findings on Windows and Linux, AMD's Windows ROCm build recognized as working.
+
+**Open**
+- A reviewer who has not seen the code, again (the last review was round 1).
+- `--json` is not documented field by field; it is meant for bug reports, but scripts will use it.
