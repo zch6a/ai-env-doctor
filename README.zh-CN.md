@@ -62,6 +62,17 @@ uvx --from git+https://github.com/zch6a/ai-env-doctor ai-env-doctor
 - **代理地址里的密码会被隐藏**（用户名和 token 也是），报告和 `--json` 里都是。但路径不会隐藏，而路径里有你的用户名：贴出去之前看一眼。
 - 没有任何依赖：只是 Python 3.10+ 的标准库。用 `uvx` 时第一次要下载并构建（这里约 15 秒），之后马上就能启动。
 
+## 直接问 AI 助手
+
+ai-env-doctor 自带一个 Agent Skill（技能）。在 Claude Code 里：
+
+```text
+/plugin marketplace add zch6a/ai-env-doctor
+/plugin install ai-env-doctor@ai-env-doctor
+```
+
+然后问它“为什么 `torch.cuda.is_available()` 是 False？”“pip install torch 卡住了，哪里出了问题？”或者“我的显卡能跑哪个本地模型？”。助手会在你的项目里运行 ai-env-doctor，读它的 JSON 结果，用大白话讲清楚问题；修复命令会先给你看，经你同意才运行。从文件夹读取技能的其他助手：把 [`plugin/skills/ai-env-doctor`](plugin/skills/ai-env-doctor/SKILL.md) 复制到它们的技能文件夹。
+
 ## 安装和使用
 
 ```bash

@@ -1,0 +1,12 @@
+{
+  "name": "ai-env-doctor",
+  "description": "ai-env-doctor for Claude Code: why PyTorch does not use your GPU, and how to fix it.",
+  "owner": { "name": "zch6a" },
+  "plugins": [
+    {
+      "name": "ai-env-doctor",
+      "source": "./plugin",
+      "description": "Diagnose GPU, CUDA, driver, PyTorch, proxy and mirror problems, and see which local models fit."
+    }
+  ]
+}

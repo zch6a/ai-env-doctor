@@ -149,6 +149,14 @@ On this laptop (6 GB): chat qwen3.5:4b, split qwen3.5:9b; code qwen2.5-coder:3b;
 
 **Tests**: 71 on Windows (74 on Linux and macOS, where the bash checks run).
 
+## Agent Skill and presentation — 2026-11-12: 1.1.0
+
+- **Agent Skill + Claude Code plugin** (`plugin/skills/ai-env-doctor/SKILL.md`, a marketplace in the repository itself; `claude plugin validate` passes for both). For an assistant the questions are "why is `torch.cuda.is_available()` False?", "pip install torch hangs" and "which local model fits?". The skill has it run the doctor in the user's project with `--json`, decide on `findings[].id` and `level` (the titles are translated and reworded: the JSON reference already says so), explain most severe first, and use the printed fix rather than a plain `pip install torch` (the fix already picks the newest build the driver can run). The fix commands uninstall and install packages: the assistant shows them and asks first; driver updates are the user's. `--offline` when the user has not agreed to the five network requests. Paths in the JSON contain the user's name: say so before it is posted.
+- **`tests/test_skill.py`**: the frontmatter (portable fields, limits), plugin and marketplace against `__version__`, every command in the skill's bash blocks run through `cli.main` on a synthetic machine (an RTX 3060 with the CPU build; the probes replaced, so never the machine running the tests, and always offline), checking the exit code the skill states, every finding field it names, `torch-cpu` with its fix, and the `models` fields; `--python` reaching the interpreter search; and every finding id the skill names existing in the source.
+- **README** (both languages): an "Ask your AI assistant" section. **Social preview** (`docs/social-preview.png`, from `scripts/social-card.html`): the README's real report, shortened. **CHANGELOG.md** (there was none). **Launch kit**: `launch/ai-env-doctor.md` outside the repository (drafts; posting is the user's).
+
+79 tests (was 75; 4 of them skip by platform).
+
 ## Summary
 
 ai-env-doctor answers "why does PyTorch not use my GPU?" with one command on Windows, macOS and Linux: it checks the driver, the PyTorch in each environment the user will actually run (by asking that environment), proxies, the network and disk space, and prints one fix per problem, as commands to copy, in English or Chinese; then the local models that fit.

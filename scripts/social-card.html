@@ -1,0 +1,49 @@
+<!doctype html>
+<!-- The repository's social preview (1280×640): docs/social-preview.png, rendered from this page with headless Chrome
+     (chrome --headless --screenshot --window-size=1280,640). The report is the README's, shortened: real output on a
+     laptop with an RTX 3060 and the CPU build of PyTorch. -->
+<html>
+<head>
+<meta charset="utf-8">
+<style>
+  html, body { margin: 0; width: 1280px; height: 640px; overflow: hidden; }
+  body { background: radial-gradient(1100px 700px at 12% 8%, #1d2b16 0%, #11150f 55%, #0c0e0b 100%); color: #e8e6e3;
+    font-family: "Segoe UI", -apple-system, system-ui, sans-serif; display: grid; grid-template-columns: 470px 1fr; gap: 40px;
+    padding: 0 56px 0 72px; box-sizing: border-box; align-items: center; }
+  h1 { font-size: 64px; margin: 0 0 18px; letter-spacing: -1.5px; }
+  h1 span { color: #8bd450; }
+  .tag { font-size: 32px; line-height: 1.25; margin: 0 0 24px; font-weight: 600; }
+  .tag code { font: 600 27px Consolas, ui-monospace, monospace; color: #8bd450; }
+  .sub { font-size: 20px; line-height: 1.45; color: #b5b9b0; margin: 0 0 30px; }
+  .cmd { font: 17px Consolas, ui-monospace, monospace; background: #1a1f17; border: 1px solid #323a2c; border-radius: 10px; padding: 13px 16px; color: #fff; }
+  .cmd b { color: #8bd450; font-weight: 400; }
+  .term { background: #121410; border: 1px solid #2a2f26; border-radius: 14px; padding: 18px 22px 20px; font: 15.5px/1.6 Consolas, ui-monospace, monospace; white-space: pre; box-shadow: 0 26px 70px rgba(0,0,0,.45); }
+  .dots { margin-bottom: 10px; } .dots i { display: inline-block; width: 12px; height: 12px; border-radius: 50%; margin-right: 7px; }
+  .e { color: #ff7b72; } .w { color: #8b949e; } .ok { color: #8bd450; } .f { color: #79c0ff; } .d { color: #8b949e; } .wh { color: #fff; font-weight: 600; }
+</style>
+</head>
+<body>
+  <div>
+    <h1>ai-env-<span>doctor</span></h1>
+    <p class="tag">Why is <code>cuda.is_available()</code><br>False?</p>
+    <p class="sub">One read-only command checks the GPU, the driver, the PyTorch you actually installed, your proxies and mirrors, and prints the exact fix. Then it lists the local models this machine can run.</p>
+    <div class="cmd" style="white-space: pre"><b>$</b> uvx --from \
+    git+https://github.com/zch6a/ai-env-doctor \
+    ai-env-doctor</div>
+  </div>
+  <div class="term"><div class="dots"><i style="background:#ff5f57"></i><i style="background:#febc2e"></i><i style="background:#28c840"></i></div><span class="wh">Findings:</span>
+  <span class="e">✗ PyTorch 2.15.0+cpu is the CPU-only build:</span>
+<span class="e">    it will not use the RTX 3060 Laptop GPU</span>
+      <span class="f">fix: uv pip uninstall torch</span>
+<span class="f">           uv pip install torch --index-url</span>
+<span class="f">             https://download.pytorch.org/whl/cu126</span>
+  <span class="w">· The newest PyTorch (2.15.0) needs CUDA 13.2;</span>
+<span class="w">    this driver supports 12.7, so: 2.14.1 (cu126)</span>
+  <span class="ok">✓ NVIDIA GPU: RTX 3060 Laptop (6.0 GB), driver 566.36</span>
+  <span class="ok">✓ The network reaches pypi.org, huggingface.co, …</span>
+
+<span class="wh">Models this machine can run</span> <span class="d">(Ollama, GPU 5.5 GB)</span>
+  chat   fits: qwen3.5:4b   <span class="d">split, slower: qwen3.5:9b</span>
+  code   fits: qwen2.5-coder:3b   <span class="d">split: …:7b</span></div>
+</body>
+</html>

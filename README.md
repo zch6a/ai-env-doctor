@@ -101,6 +101,20 @@ has no pip; elsewhere it is `python -m pip`.
 - No dependencies: it is plain Python 3.10+. With `uvx`, the first run fetches and builds it (about
   15 seconds here); later runs start at once.
 
+## Ask your AI assistant
+
+ai-env-doctor comes with an Agent Skill. In Claude Code:
+
+```text
+/plugin marketplace add zch6a/ai-env-doctor
+/plugin install ai-env-doctor@ai-env-doctor
+```
+
+Then ask "why is `torch.cuda.is_available()` False?", "pip install torch hangs, what is wrong?" or "which local
+model can my GPU run?". The assistant runs ai-env-doctor in your project, reads its JSON, and explains what is
+wrong. It shows you the fix commands and asks before running any. Assistants that read Agent Skills from a folder:
+copy [`plugin/skills/ai-env-doctor`](plugin/skills/ai-env-doctor/SKILL.md) into theirs.
+
 ## Install and use
 
 ```bash
