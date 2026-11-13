@@ -170,3 +170,9 @@ What mattered most, in hindsight:
 Rounds: development (28 tests) → 1 first review, end to end on an RTX 3060 (42) → 2 conda, WSL, dated model list (51) → 3 the model list checked against Ollama's library, AMD on Windows, CI on Node 24 (55) → 4 second review, the PYTHONHOME leak, `--json` documented (71) → 5 claims checked, 1.0.0.
 
 Still open: WSL, containers, AMD GPUs and conda with a conda-installed PyTorch have not been tried by hand; the model list needs checking against Ollama's library every few months (the report says when it is old).
+
+### 2026-11-14 — Chinese README: AI tone
+
+2 places changed: the five-item 、 list in the tagline (now grouped into three), and the only decorative —— (now a comma, with the following semicolon split into a full stop).
+The checks follow the findings of lieflat-less-ai-tone (shiujan, CC BY-NC 4.0); its findings were applied, none of its text was copied.
+Left as they were: the colon-led lists and the exhaustive lists of what is checked and what is untested, the sample output, tables and code blocks.

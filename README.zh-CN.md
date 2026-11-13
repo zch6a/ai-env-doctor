@@ -2,7 +2,7 @@
 
 # ai-env-doctor
 
-**为什么 PyTorch 用不了我的显卡？** 一条命令检查显卡、驱动、你实际装的 PyTorch、代理和镜像，告诉你哪里有问题，并给出能直接复制的修复命令。然后列出这台电脑能跑的本地模型。
+**为什么 PyTorch 用不了我的显卡？** 一条命令检查显卡和驱动、你实际装的 PyTorch，以及代理和镜像，告诉你哪里有问题，并给出能直接复制的修复命令。然后列出这台电脑能跑的本地模型。
 
 <a href="https://github.com/zch6a/ai-env-doctor/actions/workflows/ci.yml"><img alt="CI" src="https://github.com/zch6a/ai-env-doctor/actions/workflows/ci.yml/badge.svg"></a>
 <img alt="Python 3.10+" src="https://img.shields.io/badge/python-3.10%2B-3776ab?logo=python&logoColor=white">
@@ -57,7 +57,7 @@ uvx --from git+https://github.com/zch6a/ai-env-doctor ai-env-doctor
 
 ## 放心运行
 
-- **不改动任何东西。** 不安装、不删除、不写入任何东西；修复命令只是打印出来，由你自己决定是否运行。它执行的只有：系统自带的硬件查询工具（`nvidia-smi`、`lspci`、PowerShell 的 `Get-CimInstance`、`sysctl`），以及它检查的每个 Python（项目的 `.venv`、当前激活的环境、PATH 上的 `python`）——在里面执行一小段导入 torch 的脚本；这段脚本在一个无关的文件夹里运行，不会误用你项目里的文件。
+- **不改动任何东西。** 不安装、不删除、不写入任何东西；修复命令只是打印出来，由你自己决定是否运行。它执行的只有：系统自带的硬件查询工具（`nvidia-smi`、`lspci`、PowerShell 的 `Get-CimInstance`、`sysctl`），以及它检查的每个 Python（项目的 `.venv`、当前激活的环境、PATH 上的 `python`），在里面执行一小段导入 torch 的脚本。这段脚本在一个无关的文件夹里运行，不会误用你项目里的文件。
 - **不发送任何关于你的信息。** 网络检查只是向上面五个地址各发一个 HEAD 请求（和 pip 一样走你的代理），再读取一次 PyTorch 公开的软件源列表；请求里不带任何关于这台电脑的信息。加 `--offline` 就全部跳过。
 - **代理地址里的密码会被隐藏**（用户名和 token 也是），报告和 `--json` 里都是。但路径不会隐藏，而路径里有你的用户名：贴出去之前看一眼。
 - 没有任何依赖：只是 Python 3.10+ 的标准库。用 `uvx` 时第一次要下载并构建（这里约 15 秒），之后马上就能启动。
